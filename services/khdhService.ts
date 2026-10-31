@@ -107,36 +107,52 @@ export const extractGradeNumber = (className?: string): string => {
 
 const generateKhdhJsonWithFallback = async (ai: GoogleGenAI, parts: any[]): Promise<string> => {
     const models = [
+        'gemini-2.5-flash-lite',
         'gemini-2.5-flash',
         'gemini-3-flash-preview',
-        'gemini-flash-latest',
-        'gemini-3.1-flash-lite-preview'
+        'gemini-3.1-flash-lite-preview',
+        'gemini-2.0-flash',
+        'gemini-2.5-pro',
+        'gemini-2.0-flash-lite'
     ];
     let lastErr: any = null;
-    for (const modelName of models) {
-        const isGemini3 = modelName.startsWith('gemini-3');
+    const maxAttempts = 14;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const modelName = models[attempt % models.length];
         try {
             const config: any = {
                 responseMimeType: "application/json",
                 temperature: 0.1
             };
-            if (isGemini3) {
-                config.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
+            if (modelName === 'gemini-2.5-flash') {
+                config.thinkingConfig = { thinkingBudget: 0 };
+            } else if (modelName === 'gemini-3-flash-preview') {
+                config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
             }
             const response = await ai.models.generateContent({
                 model: modelName,
                 contents: { parts },
                 config
             });
-            if (response && response.text) {
+            if (response && response.text && response.text.includes('{')) {
                 return response.text;
             }
         } catch (err: any) {
             lastErr = err;
-            console.warn(`KHDH model ${modelName} fallback:`, err?.message || err);
+            console.warn(`KHDH model ${modelName} attempt ${attempt + 1}/${maxAttempts} fallback:`, err?.message || err);
+            const msg = String(err?.message || JSON.stringify(err || '')).toLowerCase();
+            if (msg.includes('api_key_invalid') || msg.includes('api key not valid')) {
+                throw new Error("Gemini API Key không hợp lệ. Vui lòng kiểm tra lại API Key.");
+            }
+            const waitMs = (attempt + 1) % models.length === 0 ? 1800 : 450;
+            await new Promise(resolve => setTimeout(resolve, waitMs));
         }
     }
-    throw lastErr || new Error("Không thể kết nối với AI.");
+    const lastMsg = String(lastErr?.message || JSON.stringify(lastErr || '')).toLowerCase();
+    if (lastMsg.includes('503') || lastMsg.includes('unavailable') || lastMsg.includes('high demand')) {
+        throw new Error("Máy chủ AI đang có lượng truy cập cao đột biến. Vui lòng thử lại sau vài giây.");
+    }
+    throw new Error("Không thể kết nối với AI lúc này. Vui lòng thử lại sau giây lát.");
 };
 
 /**

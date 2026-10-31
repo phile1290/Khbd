@@ -423,19 +423,21 @@ export const generateLessonPlan = async ({
     parts.push({ text: userPrompt });
 
     try {
-        // Danh sách model chuẩn tương thích hoàn toàn với mọi API Key trên AI Studio, Mobile, Desktop và Vercel
+        // Danh sách 7 pool model độc lập để tự động chuyển đổi tức thì khi một model bị quá tải (503 High Demand)
         const modelsToTry = [
             'gemini-2.5-flash',
+            'gemini-2.5-flash-lite',
             'gemini-3-flash-preview',
-            'gemini-flash-latest',
-            'gemini-3.1-flash-lite-preview'
+            'gemini-3.1-flash-lite-preview',
+            'gemini-2.0-flash',
+            'gemini-2.5-pro',
+            'gemini-2.0-flash-lite'
         ];
-        let delay = 1500;
-        const maxAttempts = 6;
+        let delay = 1200;
+        const maxAttempts = 14;
 
         for (let i = 0; i < maxAttempts; i++) {
             const currentModel = modelsToTry[i % modelsToTry.length];
-            const isGemini3 = currentModel.startsWith('gemini-3');
             try {
                 const ai = new GoogleGenAI({
                     apiKey: finalApiKey
@@ -448,13 +450,13 @@ export const generateLessonPlan = async ({
                     temperature: 0.15,
                     maxOutputTokens: 32768,
                 };
-                if (isGemini3) {
+                if (currentModel === 'gemini-3-flash-preview') {
                     config.thinkingConfig = {
                         thinkingLevel: ThinkingLevel.LOW
                     };
-                } else if (currentModel.startsWith('gemini-2.5')) {
+                } else if (currentModel === 'gemini-2.5-flash') {
                     config.thinkingConfig = {
-                        thinkingBudget: 1024
+                        thinkingBudget: 512
                     };
                 }
 
@@ -493,6 +495,10 @@ export const generateLessonPlan = async ({
                 }
 
                 const isFastSwitchError =
+                    errMsg.includes('503') ||
+                    errMsg.includes('unavailable') ||
+                    errMsg.includes('high demand') ||
+                    errMsg.includes('overloaded') ||
                     errMsg.includes('404') ||
                     errMsg.includes('not found') ||
                     errMsg.includes('not_found') ||
@@ -502,10 +508,8 @@ export const generateLessonPlan = async ({
                 const isRetryable = (
                     isFastSwitchError ||
                     errMsg.includes('quota') ||
-                    errMsg.includes('503') ||
                     errMsg.includes('500') ||
                     errMsg.includes('internal') ||
-                    errMsg.includes('unavailable') ||
                     errMsg.includes('429') ||
                     errMsg.includes('resource_exhausted') ||
                     errMsg.includes('resource exhausted') ||
@@ -522,20 +526,24 @@ export const generateLessonPlan = async ({
                     if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('resource_exhausted')) {
                         throw new Error("API Key đã vượt giới hạn lượt gọi (Quota/429) sau nhiều lần thử lại. Vui lòng dùng API Key mới hoặc đợi vài phút.");
                     }
-                    throw new Error(err?.message || "Lỗi không xác định khi gọi AI.");
+                    if (errMsg.includes('503') || errMsg.includes('unavailable') || errMsg.includes('high demand')) {
+                        throw new Error("Máy chủ AI của Google đang có lượng truy cập cao đột biến. Vui lòng bấm thực hiện lại sau vài giây.");
+                    }
+                    throw new Error("Không thể xử lý yêu cầu lúc này. Vui lòng thử lại.");
                 }
 
-                if (isFastSwitchError) {
-                    await new Promise(resolve => setTimeout(resolve, 300));
+                // Nếu gặp lỗi 503 (High demand) hoặc 404/400 trên model hiện tại, chuyển ngay sang pool model kế tiếp sau 400ms
+                if (isFastSwitchError && (i + 1) % modelsToTry.length !== 0) {
+                    await new Promise(resolve => setTimeout(resolve, 400));
                     continue;
                 }
 
                 if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('resource_exhausted')) {
-                    delay = Math.max(delay, 3500);
+                    delay = Math.max(delay, 2500);
                 }
 
                 await new Promise(resolve => setTimeout(resolve, delay));
-                delay *= 1.3;
+                delay = Math.min(delay * 1.3, 5000);
             }
         }
         throw new Error("Không thể kết nối với AI sau nhiều lần thử.");
@@ -659,22 +667,29 @@ TUYỆT ĐỐI KHÔNG thêm văn bản giải thích hay markdown bên ngoài ch
 
     try {
         let responseText = '';
+        // Sử dụng 7 pool model độc lập để đảm bảo khi 1 model bị quá tải (503 UNAVAILABLE) hệ thống chuyển sang model khác ngay lập tức
         const ppctModels = [
+            'gemini-2.5-flash-lite',
             'gemini-2.5-flash',
             'gemini-3-flash-preview',
-            'gemini-flash-latest',
-            'gemini-3.1-flash-lite-preview'
+            'gemini-3.1-flash-lite-preview',
+            'gemini-2.0-flash',
+            'gemini-2.5-pro',
+            'gemini-2.0-flash-lite'
         ];
         let lastError: any = null;
+        const maxPpctAttempts = 14;
 
-        for (const ppctModel of ppctModels) {
-            const isGemini3 = ppctModel.startsWith('gemini-3');
+        for (let attempt = 0; attempt < maxPpctAttempts; attempt++) {
+            const ppctModel = ppctModels[attempt % ppctModels.length];
             try {
                 const config: any = {
                     responseMimeType: "application/json",
                     temperature: 0.1
                 };
-                if (isGemini3) {
+                if (ppctModel === 'gemini-2.5-flash') {
+                    config.thinkingConfig = { thinkingBudget: 0 };
+                } else if (ppctModel === 'gemini-3-flash-preview') {
                     config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
                 }
 
@@ -686,25 +701,36 @@ TUYỆT ĐỐI KHÔNG thêm văn bản giải thích hay markdown bên ngoài ch
                     ],
                     config
                 });
-                responseText = response.text || '';
-                if (responseText) break;
-            } catch(e: any) {
+                responseText = (response.text || '').trim();
+                if (responseText && responseText.includes('{')) break;
+            } catch (e: any) {
                 lastError = e;
-                console.warn(`PPCT extraction attempt with ${ppctModel} failed:`, e);
-                const msg = String(e?.message || '').toLowerCase();
-                if (msg.includes('api_key_invalid') || msg.includes('api key not valid')) {
+                console.warn(`PPCT extraction attempt ${attempt + 1}/${maxPpctAttempts} with ${ppctModel} failed:`, e?.message || e);
+                const msg = String(e?.message || JSON.stringify(e || '')).toLowerCase();
+                if (msg.includes('api_key_invalid') || msg.includes('api key not valid') || msg.includes('permission_denied')) {
                     throw new Error("Gemini API Key không hợp lệ. Vui lòng kiểm tra lại API Key.");
                 }
+                // Chờ ngắn khi đổi sang pool model tiếp theo, hoặc chờ lâu hơn nếu đã hết 1 vòng các model
+                const waitMs = (attempt + 1) % ppctModels.length === 0 ? 1800 : 450;
+                await new Promise(resolve => setTimeout(resolve, waitMs));
             }
         }
 
-        if (!responseText && lastError) {
-            throw lastError;
+        if (!responseText) {
+            const errStr = String(lastError?.message || JSON.stringify(lastError || '')).toLowerCase();
+            if (errStr.includes('503') || errStr.includes('unavailable') || errStr.includes('high demand')) {
+                throw new Error("Máy chủ AI đang có lượng truy cập cao đột biến. Vui lòng bấm 'Phân tích lại file PPCT' sau vài giây.");
+            }
+            if (errStr.includes('429') || errStr.includes('quota') || errStr.includes('resource_exhausted')) {
+                throw new Error("API Key đang tạm thời chạm giới hạn lượt gọi (Quota/429). Vui lòng đợi khoảng 30 giây rồi bấm 'Phân tích lại file PPCT' hoặc nhập API Key khác.");
+            }
+            throw new Error("Không thể phân tích file PPCT lúc này. Vui lòng bấm 'Phân tích lại file PPCT' để thử lại.");
         }
 
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        const cleanedJsonText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        const jsonMatch = cleanedJsonText.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
-            throw new Error("Không tìm thấy cấu trúc JSON hợp lệ trong phản hồi.");
+            throw new Error("Không tìm thấy cấu trúc dữ liệu hợp lệ trong phản hồi. Vui lòng bấm 'Phân tích lại file PPCT'.");
         }
         const parsed = JSON.parse(jsonMatch[0]);
         if (Array.isArray(parsed.lessons) && parsed.lessons.length > 0) {

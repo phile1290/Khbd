@@ -404,18 +404,22 @@ NGUYÊN TẮC THIẾT KẾ HÌNH ẢNH BẤT DI BẤT DỊCH (ĐẢM BẢO CHÍN
   + Trong nội dung chữ XML, tuyệt đối không viết ký tự "&" trần (phải viết "và" hoặc "&amp;"), không dùng "&nbsp;" hay thẻ "<br>".`;
 
         const svgModels = [
+            'gemini-2.5-flash-lite',
             'gemini-2.5-flash',
             'gemini-3-flash-preview',
-            'gemini-flash-latest'
+            'gemini-3.1-flash-lite-preview',
+            'gemini-2.0-flash',
+            'gemini-2.0-flash-lite'
         ];
 
-        for (const modelName of svgModels) {
+        for (let attempt = 0; attempt < svgModels.length; attempt++) {
+            const modelName = svgModels[attempt];
             try {
                 const config: any = {
                     temperature: 0.2,
                     maxOutputTokens: 8192
                 };
-                if (modelName.startsWith('gemini-2.5')) {
+                if (modelName === 'gemini-2.5-flash') {
                     config.thinkingConfig = { thinkingBudget: 0 };
                 }
 
@@ -440,7 +444,7 @@ NGUYÊN TẮC THIẾT KẾ HÌNH ẢNH BẤT DI BẤT DỊCH (ĐẢM BẢO CHÍN
                     }
                 }
             } catch {
-                // Thử tiếp model dự phòng tiếp theo
+                await new Promise(r => setTimeout(r, 350));
             }
         }
 
@@ -760,16 +764,19 @@ export const pregenerateLessonImagesWithAI = async (
 
     if (tasks.length === 0) return;
 
-    // Tạo đồng thời tất cả các hình ảnh trong tiết dạy bằng AI từ câu văn phía trên
+    // Tạo đồng thời các hình ảnh trong tiết dạy với độ trễ khởi động 120ms giữa các tác vụ để tránh nghẽn 503
     await Promise.all(
-        tasks.map(task =>
-            generateSingleIllustrationWithAI(
+        tasks.map(async (task, idx) => {
+            if (idx > 0) {
+                await new Promise(r => setTimeout(r, idx * 120));
+            }
+            return generateSingleIllustrationWithAI(
                 task.immediatePrecedingLine,
                 task.cleanDesc,
                 task.lessonTitle,
                 subjectContext,
                 resolvedApiKey
-            ).catch(() => null)
-        )
+            ).catch(() => null);
+        })
     );
 };

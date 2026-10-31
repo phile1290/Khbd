@@ -146,6 +146,34 @@ const App: React.FC = () => {
             setPpctPdfFile(file);
             setPpctError('');
             setError('');
+
+            // Tự động nhận diện Môn học và Khối lớp từ tên tệp PPCT nếu có (VD: KHDH_Mon_Cong_Nghe_Lop_3.pdf)
+            const normName = file.name
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/đ/g, 'd')
+                .replace(/Đ/g, 'D')
+                .toLowerCase();
+            const gradeMatch = normName.match(/(?:lop|khoi)[\s_\-]*([1-5])/i);
+            let detectedSubject = '';
+            if (normName.includes('cong_nghe') || normName.includes('cong nghe')) detectedSubject = 'Công nghệ';
+            else if (normName.includes('tin_hoc') || normName.includes('tin hoc')) detectedSubject = 'Tin học';
+            else if (normName.includes('ky_nang_so') || normName.includes('ki_nang_so') || normName.includes('ky nang so') || normName.includes('ki nang so')) detectedSubject = 'Giáo dục kĩ năng công dân số';
+            else if (normName.includes('tieng_viet') || normName.includes('tieng viet')) detectedSubject = 'Tiếng Việt';
+            else if (normName.includes('toan')) detectedSubject = 'Toán';
+            else if (normName.includes('khoa_hoc') || normName.includes('khoa hoc')) detectedSubject = 'Khoa học';
+            else if (normName.includes('lich_su') || normName.includes('dia_li') || normName.includes('dia_ly')) detectedSubject = 'Lịch sử và Địa lý';
+            else if (normName.includes('dao_duc') || normName.includes('dao duc')) detectedSubject = 'Đạo đức';
+            else if (normName.includes('tu_nhien') || normName.includes('xa_hoi')) detectedSubject = 'Tự nhiên và Xã hội';
+            else if (normName.includes('trai_nghiem') || normName.includes('hdtn')) detectedSubject = 'Hoạt động trải nghiệm';
+
+            if (detectedSubject || gradeMatch) {
+                setInputData(prev => ({
+                    ...prev,
+                    subject: detectedSubject || prev.subject,
+                    grade: gradeMatch ? gradeMatch[1] : prev.grade
+                }));
+            }
             
             const effectiveKey = getEffectiveApiKey();
             if (effectiveKey) {
@@ -175,7 +203,12 @@ const App: React.FC = () => {
             }
         } catch (err: any) {
             console.warn(err);
-            setPpctError(err.message || 'Không thể trích xuất danh sách bài học từ file PPCT.');
+            const rawMsg = String(err?.message || 'Không thể trích xuất danh sách bài học từ file PPCT.');
+            const cleanMsg =
+                rawMsg.includes('503') || rawMsg.includes('UNAVAILABLE') || rawMsg.includes('high demand')
+                    ? 'Máy chủ AI đang có lượng truy cập cao đột biến. Vui lòng bấm "Phân tích lại file PPCT" sau vài giây.'
+                    : rawMsg;
+            setPpctError(cleanMsg);
         } finally {
             setParsingPpct(false);
         }
