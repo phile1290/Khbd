@@ -371,10 +371,14 @@ const App: React.FC = () => {
             });
 
             // Sử dụng Trí tuệ nhân tạo (AI) chuyển trực tiếp câu văn phía trên thành hình ảnh minh họa cho tiết học
-            try {
-                await pregenerateLessonImagesWithAI(resultData, inputData.subject, inputData.grade, effectiveKey);
-            } catch {
-                // Nếu mạng gián đoạn tạm thời, trình xem sẽ tự động gọi AI bổ sung khi hiển thị
+            if (isBatchMode) {
+                pregenerateLessonImagesWithAI(resultData, inputData.subject, inputData.grade, effectiveKey).catch(() => {});
+            } else {
+                try {
+                    await pregenerateLessonImagesWithAI(resultData, inputData.subject, inputData.grade, effectiveKey);
+                } catch {
+                    // Nếu mạng gián đoạn tạm thời, trình xem sẽ tự động gọi AI bổ sung khi hiển thị
+                }
             }
 
             updateWeekPlansState(prev =>
@@ -444,13 +448,13 @@ const App: React.FC = () => {
             rightPanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
+        // Vòng 1: Soạn tuần tự tất cả các tuần chưa hoàn thành
         for (let i = 0; i < totalWeeks; i++) {
             if (abortBatchRef.current) break;
 
             const currentItem = weekPlansRef.current[i];
             if (!currentItem) continue;
 
-            // Nếu chưa hoàn thành đủ tất cả các tuần thì chỉ soạn những tuần chưa hoàn thành hoặc bị lỗi
             if (!allAlreadyCompleted && currentItem.status === 'completed' && currentItem.result) {
                 continue;
             }
@@ -458,9 +462,22 @@ const App: React.FC = () => {
             setBatchCurrentIndex(i);
             setSelectedWeekIndex(i);
             const ok = await generateForWeekIndex(i, true);
-            // Tự động thử lại 1 lần nếu tuần gặp lỗi mạng tạm thời
             if (!ok && !abortBatchRef.current) {
                 await new Promise(r => setTimeout(r, 800));
+                if (!abortBatchRef.current) {
+                    await generateForWeekIndex(i, true);
+                }
+            }
+        }
+
+        // Vòng 2: Rà soát tự động lần cuối các tuần còn sót (nếu có) để đảm bảo hoàn thành đủ 100% số tuần (35/35 tuần)
+        for (let i = 0; i < totalWeeks; i++) {
+            if (abortBatchRef.current) break;
+            const itemAfterPass1 = weekPlansRef.current[i];
+            if (itemAfterPass1 && (itemAfterPass1.status !== 'completed' || !itemAfterPass1.result)) {
+                setBatchCurrentIndex(i);
+                setSelectedWeekIndex(i);
+                await new Promise(r => setTimeout(r, 600));
                 if (!abortBatchRef.current) {
                     await generateForWeekIndex(i, true);
                 }

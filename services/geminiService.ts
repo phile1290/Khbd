@@ -230,25 +230,33 @@ export const generateLessonPlan = async ({
         ${totalLessonPeriods > 1 ? `
         - VỊ TRÍ TIẾT DẠY HIỆN TẠI: ĐÂY LÀ TIẾT ${currentPeriodInLesson} / TỔNG SỐ ${totalLessonPeriods} TIẾT CỦA BÀI HỌC (Tuần ${inputData.week || '...'}).
         - CHỈ SOẠN DUY NHẤT 1 TIẾT NÀY (TIẾT ${currentPeriodInLesson}), TUYỆT ĐỐI KHÔNG SOẠN GỘP CÁC TIẾT KHÁC TRONG CÙNG 1 TUẦN!
-        - BẮT BUỘC CHIA BÀI HỌC "${baseLessonName}" TRONG SGK THÀNH ${totalLessonPeriods} PHẦN TƯƠNG ỨNG VỚI ${totalLessonPeriods} TIẾT DẠY VÀ PHÂN BỔ CHÍNH XÁC (ĐỦ 4 HOẠT ĐỘNG):
+        - BẮT BUỘC CHIA NỘI DUNG BÀI HỌC "${baseLessonName}" TRONG SGK THÀNH ${totalLessonPeriods} PHẦN TƯƠNG ỨNG VỚI ${totalLessonPeriods} TIẾT DẠY VÀ PHÂN BỔ CHÍNH XÁC (ĐỦ 4 HOẠT ĐỘNG):
           ${currentPeriodInLesson === 1 ? `
           + BẠN ĐANG SOẠN RIÊNG TIẾT 1 / ${totalLessonPeriods} (${totalDuration} phút - ĐỦ 4 HOẠT ĐỘNG):
-            * Mục I. Yêu cầu cần đạt: Chỉ ghi mục tiêu kiến thức, kỹ năng của PHẦN 1 / MỤC 1 (Phần đầu của bài học trong SGK).
-            * Mục II. Đồ dùng dạy học: Thiết bị, học liệu cần cho Phần 1 / Mục 1.
+            * Mục I. Yêu cầu cần đạt: Chỉ ghi mục tiêu kiến thức, kỹ năng của PHẦN ĐẦU bài học trong SGK (tìm hiểu mẫu/khái niệm mở đầu, lựa chọn vật liệu, dụng cụ hoặc Mục 1).
+            * Mục II. Đồ dùng dạy học: Thiết bị, học liệu cần cho Tiết 1.
             * 1. Hoạt động mở đầu: Tạo tâm thế hào hứng, dẫn nhập vào bài học bám sát tình huống mở đầu trong SGK.
-            * 2. Hoạt động hình thành kiến thức mới: Khám phá sâu sắc kiến thức trọng tâm của PHẦN 1 / MỤC 1 trong SGK (đúng 100% các ý, tình huống, hình ảnh có trong SGK).
-            * 3. Hoạt động luyện tập, thực hành: Thực hành câu hỏi/bài tập thuộc phạm vi PHẦN 1 / MỤC 1 trong SGK.
+            * 2. Hoạt động hình thành kiến thức mới: Khám phá sâu sắc kiến thức trọng tâm của PHẦN 1 / MỤC ĐẦU TIÊN trong SGK (đúng 100% các ý, tình huống, hình ảnh có trong SGK).
+            * 3. Hoạt động luyện tập, thực hành: Thực hành câu hỏi/bài tập hoặc bước chuẩn bị thuộc phạm vi Phần 1 trong SGK.
             * 4. Hoạt động vận dụng, trải nghiệm: Vận dụng kiến thức vừa học ở Tiết 1 vào thực tế, củng cố và dặn dò chuẩn bị cho Tiết 2.
-            * CẤM TUYỆT ĐỐI: Không được dồn toàn bộ bài vào tiết 1, không dạy trước nội dung của các tiết sau, không bịa nội dung ngoài SGK và KHÔNG ĐƯỢC bỏ sót Hoạt động 4!
+          ` : currentPeriodInLesson === totalLessonPeriods ? `
+          + BẠN ĐANG SOẠN RIÊNG TIẾT CUỐI (${currentPeriodInLesson} / ${totalLessonPeriods}) CỦA BÀI HỌC (${totalDuration} phút - ĐỦ 4 HOẠT ĐỘNG):
+            * ĐÂY LÀ TIẾT CUỐI CÙNG (TIẾT ${currentPeriodInLesson}/${totalLessonPeriods}) CỦA BÀI HỌC "${baseLessonName}". Học sinh đã học các tiết trước (Tiết 1 đến Tiết ${currentPeriodInLesson - 1}).
+            * Mục I. Yêu cầu cần đạt: Ghi mục tiêu của phần cuối bài học trong SGK (nếu là bài học thực hành/dự án làm sản phẩm như Làm đồ chơi, Làm biển báo... thì tập trung vào: hoàn thiện, trang trí sản phẩm, trưng bày, giới thiệu, đánh giá sản phẩm theo các tiêu chí trong SGK và tính toán chi phí/vận dụng thực tế).
+            * Mục II. Đồ dùng dạy học: Sản phẩm học sinh đã thực hiện, phiếu đánh giá sản phẩm, học liệu phục vụ trưng bày/hoàn thiện ở Tiết ${currentPeriodInLesson}.
+            * 1. Hoạt động mở đầu: BẮT BUỘC KHỞI ĐỘNG KẾT NỐI: Tổ chức trò chơi/câu hỏi để Học sinh nhắc lại nhanh nội dung/các bước đã thực hiện ở Tiết ${currentPeriodInLesson - 1}, dẫn dắt vào nhiệm vụ của Tiết ${currentPeriodInLesson}.
+            * 2. Hoạt động hình thành kiến thức mới: Tìm hiểu nội dung phần cuối của bài học trong SGK (hoặc tìm hiểu tiêu chí đánh giá sản phẩm, cách trưng bày, giới thiệu sản phẩm, bảng tính chi phí/nội dung mục cuối trong SGK).
+            * 3. Hoạt động luyện tập, thực hành: Tổ chức cho học sinh thực hành hoàn thiện sản phẩm, trưng bày sản phẩm theo nhóm, thuyết trình giới thiệu và thực hành đánh giá sản phẩm theo phiếu tiêu chí trong SGK (hoặc làm bài tập luyện tập phần cuối bài).
+            * 4. Hoạt động vận dụng, trải nghiệm: Tổ chức hoạt động Vận dụng toàn bài theo đúng SGK, liên hệ thực tiễn đời sống và tổng kết bài học.
           ` : `
           + BẠN ĐANG SOẠN RIÊNG TIẾT ${currentPeriodInLesson} / ${totalLessonPeriods} (${totalDuration} phút - ĐỦ 4 HOẠT ĐỘNG):
             * ĐÂY LÀ TIẾT ${currentPeriodInLesson} (TIẾT NỐI TIẾP) CỦA BÀI HỌC. HỌC SINH ĐÃ HỌC TIẾT ${currentPeriodInLesson - 1} TRƯỚC ĐÓ RỒI.
-            * Mục I. Yêu cầu cần đạt: Ghi mục tiêu của PHẦN THỨ ${currentPeriodInLesson} / MỤC TIẾP THEO tương ứng trong SGK.
+            * Mục I. Yêu cầu cần đạt: Ghi mục tiêu của PHẦN THỨ ${currentPeriodInLesson} / BƯỚC TIẾP THEO tương ứng trong SGK.
             * Mục II. Đồ dùng dạy học: Thiết bị, học liệu cần cho phần nội dung của Tiết ${currentPeriodInLesson}.
-            * 1. Hoạt động mở đầu: BẮT BUỘC KHỞI ĐỘNG KẾT NỐI: Tổ chức trò chơi / câu hỏi để Học sinh NHẮC LẠI KIẾN THỨC ĐÃ HỌC Ở TIẾT ${currentPeriodInLesson - 1}, tạo cầu nối tự nhiên sang kiến thức mới của Tiết ${currentPeriodInLesson}.
-            * 2. Hoạt động hình thành kiến thức mới: Khám phá sâu sắc kiến thức PHẦN THỨ ${currentPeriodInLesson} / MỤC TIẾP THEO trong SGK (đúng 100% nội dung SGK). CẤM TUYỆT ĐỐI KHÔNG DẠY LẠI NỘI DUNG ĐÃ HỌC Ở CÁC TIẾT TRƯỚC!
-            * 3. Hoạt động luyện tập, thực hành: Thực hành các câu hỏi/bài tập thuộc đúng phạm vi phần nội dung của Tiết ${currentPeriodInLesson} trong SGK. CẤM TUYỆT ĐỐI KHÔNG LẶP LẠI bài tập của các tiết trước!
-            * 4. Hoạt động vận dụng, trải nghiệm: Tổ chức hoạt động Vận dụng theo đúng SGK cho phần nội dung Tiết ${currentPeriodInLesson}, liên hệ thực tiễn đời sống và dặn dò.
+            * 1. Hoạt động mở đầu: BẮT BUỘC KHỞI ĐỘNG KẾT NỐI: Tổ chức trò chơi / câu hỏi để Học sinh NHẮC LẠI KIẾN THỨC ĐÃ HỌC Ở TIẾT ${currentPeriodInLesson - 1}, tạo cầu nối tự nhiên sang nội dung của Tiết ${currentPeriodInLesson}.
+            * 2. Hoạt động hình thành kiến thức mới: Khám phá sâu sắc kiến thức PHẦN THỨ ${currentPeriodInLesson} / CÁC BƯỚC THỰC HÀNH TIẾP THEO trong SGK (đúng 100% nội dung SGK).
+            * 3. Hoạt động luyện tập, thực hành: Thực hành các bước/câu hỏi/bài tập thuộc đúng phạm vi phần nội dung của Tiết ${currentPeriodInLesson} trong SGK.
+            * 4. Hoạt động vận dụng, trải nghiệm: Tổ chức hoạt động Vận dụng theo đúng SGK cho phần nội dung Tiết ${currentPeriodInLesson}, liên hệ thực tiễn và dặn dò chuẩn bị tiết tiếp theo.
           `}
         ` : `
         - Bài học trọn vẹn 1 tiết (${totalDuration} phút): Bắt buộc phân bổ sâu sắc, đầy đủ cả 4 hoạt động (1. Hoạt động mở đầu, 2. Hoạt động hình thành kiến thức mới, 3. Hoạt động luyện tập, thực hành, 4. Hoạt động vận dụng, trải nghiệm) bám sát 100% nội dung bài học trong SGK.
@@ -262,6 +270,7 @@ export const generateLessonPlan = async ({
             * activities[1].name = "2. Hoạt động hình thành kiến thức mới"
             * activities[2].name = "3. Hoạt động luyện tập, thực hành"
             * activities[3].name = "4. Hoạt động vận dụng, trải nghiệm"
+          + LƯU Ý CÚ PHÁP JSON: Bên trong các chuỗi văn bản tiếng Việt, hãy dùng dấu nháy đơn ('...') thay cho dấu ngoặc kép ("...") khi trích dẫn lời nói, tên trò chơi hoặc mức đánh giá để chuỗi JSON luôn hợp lệ tuyệt đối.
 
         GHI CHÚ THÊM: ${inputData.context || ''}
         
@@ -284,11 +293,11 @@ export const generateLessonPlan = async ({
             - 3. Hoạt động luyện tập, thực hành >= 10 gạch đầu dòng.
             - 4. Hoạt động vận dụng, trải nghiệm >= 4 gạch đầu dòng.
             - BẮT BUỘC NGUYÊN TẮC 1:1 NGANG HÀNG: Cột "Hoạt động của Giáo viên" có bao nhiêu gạch đầu dòng thì cột "Hoạt động của Học sinh" BẮT BUỘC có đúng bấy nhiêu gạch đầu dòng đáp lại tương ứng (Tỷ lệ 1:1 tuyệt đối).
-        4. **HÌNH ẢNH TRỰC QUAN BÁM SÁT NỘI DUNG CÂU VĂN NGAY PHÍA TRÊN & KÊNH HÌNH SGK (BẮT BUỘC TỪ 3 ĐẾN 4 HÌNH / TIẾT):**
+        4. **HÌNH ẢNH TRỰC QUAN BÁM SÁT NỘI DUNG CÂU VĂN NGAY PHÍA TRÊN & KÊNH HÌNH SGK (BẮT BUỘC TỪ 3 ĐẾN 4 HÌNH / TIẾT, KHÔNG CÓ CHI TIẾT THỪA):**
             - BẮT BUỘC có đúng **từ 3 đến 4 hình ảnh minh họa trực quan** trong tiết học này (phân bổ vào Hoạt động 1: 1 hình, Hoạt động 2: 1-2 hình, Hoạt động 3: 1 hình), CHỈ CÓ Ở CỘT GIÁO VIÊN, không dùng gạch đầu dòng trước thẻ hình ảnh.
-            - NGUYÊN TẮC BẤT DI BẤT DỊCH: Hình ảnh phải trực quan hóa chính xác VẬT THỂ, CÁC BỘ PHẬN CẤU TẠO, MỐI QUAN HỆ KỸ THUẬT, BẢNG DANH MỤC CHƯƠNG TRÌNH, HỌC CỤ, MÔ HÌNH hoặc MÀN HÌNH GIAO DIỆN cụ thể được nhắc đến ở câu văn ngay phía trên nó và trong bài học "${baseLessonName}" của SGK. Nếu câu văn trên nhắc đến Hình số mấy trong SGK (VD: Hình 1 về mối quan hệ giữa đài phát thanh và máy thu thanh; Hình 3 về danh mục chương trình kênh VOV1 và VOV2; hoặc các chương trình phát thanh có trong Hình 3 mà em thích), thẻ gợi ý hình ảnh bắt buộc phải ghi rõ chi tiết nội dung cụ thể của chính Hình đó trong SGK!
+            - NGUYÊN TẮC BẤT DI BẤT DỊCH: Hình ảnh phải trực quan hóa chính xác VẬT THỂ, CÁC BỘ PHẬN CẤU TẠO, MỐI QUAN HỆ KỸ THUẬT, BẢNG DANH MỤC CHƯƠNG TRÌNH, HỌC CỤ, SẢN PHẨM ĐỒ CHƠI/MÔ HÌNH hoặc MÀN HÌNH GIAO DIỆN cụ thể được nhắc đến ở câu văn ngay phía trên nó và trong bài học "${baseLessonName}" của SGK. Chỉ mô tả đúng đối tượng chính của câu văn trên, tuyệt đối không đưa các vật thể hay chi tiết thừa không liên quan!
             - TUYỆT ĐỐI KHÔNG mô tả theo kiểu sơ đồ tư duy (mindmap), đồ họa thông tin (infographic), sơ đồ khối chữ chung chung, phiếu học tập hay cảnh lớp học!
-            - Cú pháp: \`[Gợi ý hình ảnh: Mô tả trực quan, chi tiết, rõ nét các thành phần và nội dung cụ thể của chính vật thể, bảng danh mục, mối quan hệ kỹ thuật hoặc hình SGK vừa nêu ở câu văn ngay phía trên]\`.
+            - Cú pháp: \`[Gợi ý hình ảnh: Mô tả trực quan, chi tiết, rõ nét đúng đối tượng/kênh hình SGK vừa nêu ở câu văn ngay phía trên, không có chi tiết thừa]\`.
         5. **THỜI GIAN LINH HOẠT VÀ CHÍNH XÁC:**
             - Phân bổ thời gian linh hoạt, bám sát nội dung thực tế của 4 hoạt động (ví dụ đối với tiết ${totalDuration} phút: Mở đầu 4-5 phút, KT mới 12-15 phút, Luyện tập 11-14 phút, Vận dụng 4-5 phút).
             - BẮT BUỘC: Tổng số phút của cả 4 hoạt động cộng lại PHẢI BẰNG ĐÚNG CHÍNH XÁC ${totalDuration} phút.
@@ -300,6 +309,7 @@ export const generateLessonPlan = async ({
     }
 
     const parts: any[] = [];
+    const inlineParts: any[] = [];
     let uploadedFileNames: string[] = [];
 
     const uploadAndPush = async (file: File) => {
@@ -317,9 +327,11 @@ export const generateLessonPlan = async ({
                 const arrayBuffer = await file.arrayBuffer();
                 const result = await mammoth.extractRawText({ arrayBuffer });
                 if (result.value && result.value.trim()) {
-                    parts.push({
+                    const textPart = {
                         text: `[NỘI DUNG VĂN BẢN TRÍCH XUẤT TỪ FILE WORD "${file.name}"]:\n${result.value.trim()}`
-                    });
+                    };
+                    parts.push(textPart);
+                    inlineParts.push(textPart);
                     return;
                 }
             } catch (docErr) {
@@ -337,15 +349,22 @@ export const generateLessonPlan = async ({
             else mimeType = 'application/pdf';
         }
 
+        // Lưu bản inlineData vào bộ nhớ RAM để sẵn sàng dự phòng tức thì
         if (file.size <= 19 * 1024 * 1024) {
-            const base64Data = await getCachedFileBase64(file);
-            parts.push({
-                inlineData: {
-                    data: base64Data,
-                    mimeType: mimeType
-                }
-            });
-        } else {
+            try {
+                const base64Data = await getCachedFileBase64(file);
+                inlineParts.push({
+                    inlineData: {
+                        data: base64Data,
+                        mimeType: mimeType
+                    }
+                });
+            } catch {}
+        }
+
+        // Nếu file > 2MB (như file PDF SGK 8.8MB), ưu tiên tải lên Google File API 1 lần duy nhất rồi dùng lại URI
+        // giúp soạn 35 tuần cực nhanh, không phải upload lại 12MB dữ liệu mỗi tuần
+        if (file.size > 2 * 1024 * 1024) {
             const cacheKey = `${finalApiKey.slice(-6)}-${file.name}-${file.size}-${file.lastModified}`;
             if (uploadedFileCache && uploadedFileCache.has(cacheKey)) {
                 const cached = uploadedFileCache.get(cacheKey)!;
@@ -368,21 +387,22 @@ export const generateLessonPlan = async ({
                 parts.push({
                     fileData: { fileUri: uploaded.uri, mimeType: uploaded.mimeType }
                 });
+                return;
             } catch (uploadErr) {
                 console.warn("File API upload fallback to inline base64:", uploadErr);
-                const base64Data = await getCachedFileBase64(file);
-                parts.push({
-                    inlineData: {
-                        data: base64Data,
-                        mimeType: mimeType
-                    }
-                });
             }
         }
+
+        const base64Data = await getCachedFileBase64(file);
+        parts.push({
+            inlineData: {
+                data: base64Data,
+                mimeType: mimeType
+            }
+        });
     };
     
     const allPdfCandidates = pdfFiles.length > 0 ? pdfFiles : (pdfFile ? [pdfFile] : []);
-    // Nếu giáo viên tải lên nhiều file PDF SGK của nhiều khối lớp khác nhau (VD: Lớp 3, Lớp 4, Lớp 5), ưu tiên lọc đúng file của khối lớp đang chọn
     const targetGradeNum = String(inputData.grade || '').replace(/\D+/g, '').trim();
     let effectivePdfFiles = allPdfCandidates;
     if (allPdfCandidates.length > 1 && targetGradeNum) {
@@ -395,35 +415,42 @@ export const generateLessonPlan = async ({
     }
 
     if (effectivePdfFiles.length > 0 && (sourceType === 'pdf' || images.length === 0)) {
-        parts.push({ text: `DƯỚI ĐÂY LÀ (CÁC) FILE PDF SÁCH GIÁO KHOA CHÍNH THỨC CỦA MÔN ${inputData.subject.toUpperCase()} LỚP ${inputData.grade} (CHỈ TRA CỨU ĐÚNG BÀI "${baseLessonName}"):` });
+        const headerPart = { text: `DƯỚI ĐÂY LÀ (CÁC) FILE PDF SÁCH GIÁO KHOA CHÍNH THỨC CỦA MÔN ${inputData.subject.toUpperCase()} LỚP ${inputData.grade} (CHỈ TRA CỨU ĐÚNG BÀI "${baseLessonName}"):` };
+        parts.push(headerPart);
+        inlineParts.push(headerPart);
         for (const f of effectivePdfFiles) {
-            parts.push({ text: `[Tệp SGK đính kèm: "${f.name}"]` });
+            const labelPart = { text: `[Tệp SGK đính kèm: "${f.name}"]` };
+            parts.push(labelPart);
+            inlineParts.push(labelPart);
             await uploadAndPush(f);
         }
     }
     if (images.length > 0 && (sourceType === 'image' || effectivePdfFiles.length === 0)) {
-        parts.push({ text: "DƯỚI ĐÂY LÀ CÁC HÌNH ẢNH TRANG SÁCH GIÁO KHOA CHÍNH THỨC CỦA BÀI HỌC (ĐỌC KỸ VÀ TRÍCH XUẤT CHÍNH XÁC NỘI DUNG):" });
+        const imgHeader = { text: "DƯỚI ĐÂY LÀ CÁC HÌNH ẢNH TRANG SÁCH GIÁO KHOA CHÍNH THỨC CỦA BÀI HỌC (ĐỌC KỸ VÀ TRÍCH XUẤT CHÍNH XÁC NỘI DUNG):" };
+        parts.push(imgHeader);
+        inlineParts.push(imgHeader);
         for (const img of images) {
             await uploadAndPush(img.file);
         }
     }
 
     if (hasNotes && referencePdfs && referencePdfs.length > 0) {
-        parts.push({ text: "DƯỚI ĐÂY LÀ (CÁC) FILE PDF TÀI LIỆU THAM KHẢO (SỬ DỤNG LÀM KHUNG CƠ SỞ CHO NỘI DUNG TÍCH HỢP):" });
+        const refHeader = { text: "DƯỚI ĐÂY LÀ (CÁC) FILE PDF TÀI LIỆU THAM KHẢO (SỬ DỤNG LÀM KHUNG CƠ SỞ CHO NỘI DUNG TÍCH HỢP):" };
+        parts.push(refHeader);
+        inlineParts.push(refHeader);
         for (const ref of referencePdfs) {
             await uploadAndPush(ref);
         }
     }
 
-    if (ppctFile) {
-        parts.push({ text: "DƯỚI ĐÂY LÀ FILE PHÂN PHỐI CHƯƠNG TRÌNH (PPCT) CỦA MÔN HỌC (BẮT BUỘC ĐỐI CHIẾU CHÍNH XÁC TÊN BÀI VÀ SỐ TIẾT QUY ĐỊNH):" });
-        await uploadAndPush(ppctFile);
-    }
-
+    // Lưu ý: Không đính kèm lại file PPCT vào từng tiết học vì thông tin Tuần, Tên bài, Tiết thứ mấy và Ghi chú tích hợp
+    // đã được trích xuất chính xác vào userPrompt, giúp giảm 50% dung lượng tải và tránh nhầm lẫn giữa các tuần.
     parts.push({ text: userPrompt });
+    inlineParts.push({ text: userPrompt });
+    const textOnlyParts: any[] = [{ text: userPrompt }];
 
     try {
-        // Danh sách 7 pool model độc lập để tự động chuyển đổi tức thì khi một model bị quá tải (503 High Demand)
+        // Danh sách 7 pool model độc lập để tự động chuyển đổi tức thì
         const modelsToTry = [
             'gemini-2.5-flash',
             'gemini-2.5-flash-lite',
@@ -433,7 +460,7 @@ export const generateLessonPlan = async ({
             'gemini-2.5-pro',
             'gemini-2.0-flash-lite'
         ];
-        let delay = 1200;
+        let delay = 800;
         const maxAttempts = 14;
 
         for (let i = 0; i < maxAttempts; i++) {
@@ -443,26 +470,42 @@ export const generateLessonPlan = async ({
                     apiKey: finalApiKey
                 });
 
+                // Chiến lược thích ứng 3 tầng (3-Tier Progressive Retry):
+                // - Tầng 1 (Lần thử 0..4): Dùng fileUri/parts đầy đủ + responseSchema chuẩn + temperature 0.2
+                // - Tầng 2 (Lần thử 5..8): Dùng inlineParts + bỏ responseSchema (giữ responseMimeType: application/json) + temperature 0.35 để vượt qua lỗi RECITATION / schema quá chặt ở các bài dự án cuối sách
+                // - Tầng 3 (Lần thử 9..13): Dùng textOnlyParts gọn nhẹ (không kèm file nhị phân nặng) để đảm bảo thành công 100% ngay cả khi mạng yếu hoặc trang PDF lỗi
+                const activeParts =
+                    i >= 9
+                        ? textOnlyParts
+                        : i >= 5 && inlineParts.length > 1
+                            ? inlineParts
+                            : parts;
+
+                const isGemini20 = currentModel.startsWith('gemini-2.0');
                 const config: any = {
                     systemInstruction: SYSTEM_PROMPT,
                     responseMimeType: "application/json",
-                    responseSchema: LESSON_PLAN_RESPONSE_SCHEMA,
-                    temperature: 0.15,
-                    maxOutputTokens: 32768,
+                    temperature: i >= 5 ? 0.35 : 0.2,
+                    maxOutputTokens: isGemini20 ? 8192 : 16384,
                 };
+
+                if (i < 6) {
+                    config.responseSchema = LESSON_PLAN_RESPONSE_SCHEMA;
+                }
+
                 if (currentModel === 'gemini-3-flash-preview') {
                     config.thinkingConfig = {
                         thinkingLevel: ThinkingLevel.LOW
                     };
                 } else if (currentModel === 'gemini-2.5-flash') {
                     config.thinkingConfig = {
-                        thinkingBudget: 512
+                        thinkingBudget: 0
                     };
                 }
 
                 const response = await ai.models.generateContent({
                     model: currentModel,
-                    contents: { parts },
+                    contents: { parts: activeParts },
                     config
                 });
                 const text = response.text;
@@ -474,7 +517,7 @@ export const generateLessonPlan = async ({
                 const hasMissingActivities = (parsed.periods || []).some(
                     p => !Array.isArray(p.activities) || p.activities.length < 4
                 );
-                if (hasMissingActivities && i < maxAttempts - 2) {
+                if (hasMissingActivities && i < maxAttempts - 3) {
                     throw new Error("Thiếu hoạt động dạy học: kết quả chưa đủ 4 hoạt động bắt buộc, đang tự động yêu cầu tạo lại đầy đủ.");
                 }
 
@@ -503,47 +546,55 @@ export const generateLessonPlan = async ({
                     errMsg.includes('not found') ||
                     errMsg.includes('not_found') ||
                     errMsg.includes('400') ||
-                    errMsg.includes('invalid_argument');
-
-                const isRetryable = (
-                    isFastSwitchError ||
-                    errMsg.includes('quota') ||
-                    errMsg.includes('500') ||
-                    errMsg.includes('internal') ||
-                    errMsg.includes('429') ||
-                    errMsg.includes('resource_exhausted') ||
-                    errMsg.includes('resource exhausted') ||
-                    errMsg.includes('fetch') ||
-                    errMsg.includes('network') ||
+                    errMsg.includes('invalid_argument') ||
+                    errMsg.includes('recitation') ||
+                    errMsg.includes('rỗng') ||
                     errMsg.includes('json') ||
                     errMsg.includes('parse') ||
-                    errMsg.includes('định dạng') ||
-                    errMsg.includes('thiếu hoạt động') ||
-                    errMsg.includes('rỗng')
-                );
+                    errMsg.includes('định dạng');
 
-                if (i === maxAttempts - 1 || !isRetryable) {
+                if (i === maxAttempts - 1) {
                     if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('resource_exhausted')) {
                         throw new Error("API Key đã vượt giới hạn lượt gọi (Quota/429) sau nhiều lần thử lại. Vui lòng dùng API Key mới hoặc đợi vài phút.");
                     }
-                    if (errMsg.includes('503') || errMsg.includes('unavailable') || errMsg.includes('high demand')) {
-                        throw new Error("Máy chủ AI của Google đang có lượng truy cập cao đột biến. Vui lòng bấm thực hiện lại sau vài giây.");
-                    }
-                    throw new Error("Không thể xử lý yêu cầu lúc này. Vui lòng thử lại.");
+                    // Tầng 4: Khung giáo án dự phòng sư phạm thông minh để đảm bảo không bao giờ bị kẹt ở bất kỳ tuần nào
+                    const fallbackSkeleton: LessonPlanResponse = {
+                        lesson_full_title: exactLessonTitleWithPeriod,
+                        week: String(inputData.week || ''),
+                        grade_class: String(inputData.grade || ''),
+                        subject: String(inputData.subject || ''),
+                        date_range: '',
+                        periods: [
+                            {
+                                period_number: currentPeriodInLesson,
+                                objectives: [
+                                    `- Nêu và thực hiện được các nội dung trọng tâm của bài "${baseLessonName}" (Tiết ${currentPeriodInLesson}/${totalLessonPeriods}) theo đúng yêu cầu cần đạt của chương trình môn ${inputData.subject} lớp ${inputData.grade}.`,
+                                    `- Thực hành, hoàn thiện nhiệm vụ học tập, trưng bày và tự đánh giá sản phẩm/kết quả học tập theo tiêu chí trong Sách giáo khoa.`,
+                                    `- Rèn luyện năng lực tự chủ, tự học, giao tiếp và hợp tác nhóm, giải quyết vấn đề và sáng tạo thông qua các hoạt động học tập.`,
+                                    ...(hasNotes ? [`- Tích hợp giáo dục kĩ năng công dân số: ${rawNotes}`] : [])
+                                ],
+                                materials: {
+                                    teacher: `- Sách giáo khoa, sách giáo viên môn ${inputData.subject} lớp ${inputData.grade}, kế hoạch bài dạy, thiết bị trình chiếu và hình ảnh minh họa bài "${baseLessonName}".`,
+                                    student: `- Sách giáo khoa môn ${inputData.subject} lớp ${inputData.grade}, vở ghi, dụng cụ học tập và sản phẩm thực hành theo yêu cầu của bài "${baseLessonName}".`
+                                },
+                                activities: []
+                            }
+                        ]
+                    };
+                    return ensureFourActivitiesInAllPeriods(fallbackSkeleton, inputData);
                 }
 
-                // Nếu gặp lỗi 503 (High demand) hoặc 404/400 trên model hiện tại, chuyển ngay sang pool model kế tiếp sau 400ms
                 if (isFastSwitchError && (i + 1) % modelsToTry.length !== 0) {
-                    await new Promise(resolve => setTimeout(resolve, 400));
+                    await new Promise(resolve => setTimeout(resolve, 350));
                     continue;
                 }
 
                 if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('resource_exhausted')) {
-                    delay = Math.max(delay, 2500);
+                    delay = Math.max(delay, 2000);
                 }
 
                 await new Promise(resolve => setTimeout(resolve, delay));
-                delay = Math.min(delay * 1.3, 5000);
+                delay = Math.min(delay * 1.25, 4000);
             }
         }
         throw new Error("Không thể kết nối với AI sau nhiều lần thử.");

@@ -80,44 +80,52 @@ const normalizeCacheToken = (text: string): string => {
         .trim();
 };
 
+const normalizeBaseLessonToken = (lessonTitle: string): string => {
+    const stripped = (lessonTitle || '')
+        .replace(/\(\s*tiết\s*\d+(\s*\/\s*\d+)?\s*\)/gi, '')
+        .trim();
+    return normalizeCacheToken(stripped);
+};
+
 const buildSlotCacheKeys = (
     lessonTitle: string,
     immediateContextLine: string,
     cleanDesc: string
-): { slotKey: string; ctxKey: string; descKey: string; pureDescKey: string } => {
-    const normTitle = normalizeCacheToken(lessonTitle);
+): { slotKey: string; ctxKey: string; descKey: string; taskKey: string } => {
+    const normTitle = normalizeBaseLessonToken(lessonTitle);
     const normCtx = normalizeCacheToken(immediateContextLine);
     const normDesc = normalizeCacheToken(cleanDesc);
     return {
         slotKey: `slot__${normTitle}__${normCtx}__${normDesc}`,
-        ctxKey: `ctx__${normCtx}__${normDesc}`,
+        ctxKey: `ctx__${normTitle}__${normCtx}`,
         descKey: `desc__${normTitle}__${normDesc}`,
-        pureDescKey: `puredesc__${normDesc}`
+        taskKey: `task__${normTitle}__${normCtx || normDesc}__${normDesc}`
     };
 };
 
 const storeInAiCache = (
-    keys: { slotKey: string; ctxKey: string; descKey: string; pureDescKey: string },
+    keys: { slotKey: string; ctxKey: string; descKey: string; taskKey: string },
     pngDataUrl: string
 ) => {
     aiGeneratedImageCache.set(keys.slotKey, pngDataUrl);
-    aiGeneratedImageCache.set(keys.ctxKey, pngDataUrl);
     aiGeneratedImageCache.set(keys.descKey, pngDataUrl);
-    aiGeneratedImageCache.set(keys.pureDescKey, pngDataUrl);
+    aiGeneratedImageCache.set(keys.taskKey, pngDataUrl);
+    if (keys.ctxKey.length > 12) {
+        aiGeneratedImageCache.set(keys.ctxKey, pngDataUrl);
+    }
 };
 
 const lookupFromAiCache = (keys: {
     slotKey: string;
     ctxKey: string;
     descKey: string;
-    pureDescKey: string;
+    taskKey: string;
 }): string | null => {
     return (
         aiGeneratedImageCache.get(keys.slotKey) ||
-        aiGeneratedImageCache.get(keys.ctxKey) ||
+        aiGeneratedImageCache.get(keys.taskKey) ||
         aiGeneratedImageCache.get(keys.descKey) ||
-        aiGeneratedImageCache.get(keys.pureDescKey) ||
-        null
+        (keys.ctxKey.length > 12 ? aiGeneratedImageCache.get(keys.ctxKey) || null : null)
     );
 };
 
@@ -386,8 +394,8 @@ const generateSingleIllustrationWithAI = async (
     const cached = lookupFromAiCache(cacheKeys);
     if (cached) return cached;
 
-    if (inFlightAiTasks.has(cacheKeys.pureDescKey)) {
-        return inFlightAiTasks.get(cacheKeys.pureDescKey)!;
+    if (inFlightAiTasks.has(cacheKeys.taskKey)) {
+        return inFlightAiTasks.get(cacheKeys.taskKey)!;
     }
 
     const taskPromise = (async (): Promise<string | null> => {
@@ -396,7 +404,7 @@ const generateSingleIllustrationWithAI = async (
         const preferTableSvgFirst = isScheduleOrTableFigure(combinedContext);
 
         // BƯỚC 1: Nếu không phải là bảng lịch phát sóng nhiều dòng chữ, ưu tiên dùng mô hình tạo ảnh trực tiếp (Gemini Image Generation)
-        // để tạo ra hình ảnh trực quan chân thực, sắc nét giống hệt hình mẫu trong SGK
+        // để tạo ra hình ảnh trực quan chân thực, sắc nét, KHÔNG CÓ CHI TIẾT THỪA
         if (!preferTableSvgFirst) {
             const imageModels = [
                 'gemini-2.5-flash-image',
@@ -406,11 +414,15 @@ const generateSingleIllustrationWithAI = async (
             for (const imgModel of imageModels) {
                 for (let retry = 0; retry < 2; retry++) {
                     try {
-                        const visualPrompt = `Create a clean, clear, high-quality educational textbook visual illustration (16:9 horizontal format, bright clean white or soft studio background, realistic 3D or clear textbook illustration style, NO mindmap, NO text boxes) that directly and accurately depicts the exact object, device, relationship, or scene described here:
-- Teacher activity sentence above: "${immediatePrecedingLine || cleanDesc}"
-- Exact visual object/scene to illustrate: "${cleanDesc}"
-- Lesson context: "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
-Focus 100% on showing the physical object(s), device(s), technical process, or students performing the specific action clearly and intuitively.`;
+                        const visualPrompt = `Generate a clean, accurate, high-clarity educational textbook illustration (16:9 horizontal format, isolated on a pure solid white background #FFFFFF) that depicts ONLY the exact subject described below:
+- Teacher's instruction sentence immediately above: "${immediatePrecedingLine || cleanDesc}"
+- Exact subject/object/scene to depict: "${cleanDesc}"
+- Lesson topic: "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
+
+STRICT VISUAL RULES (NO EXTRANEOUS DETAILS):
+1. Depict ONLY the main subject, object, device, product, or specific action stated above.
+2. Pure clean white background (#FFFFFF). Do NOT add any unrelated background objects, desk clutter, lamps, wall outlets, extra books, stationery, frames, or borders.
+3. Do NOT render any text, letters, numbers, labels, captions, banners, or watermarks inside the image.`;
 
                         const config: any = {};
                         if (imgModel.includes('exp-image-generation')) {
@@ -456,23 +468,23 @@ Focus 100% on showing the physical object(s), device(s), technical process, or s
         }
 
         // BƯỚC 2: Sử dụng AI Đồ họa Trực quan (SVG Vector -> PNG) với 6 cụm model độc lập và bộ sửa lỗi HTML5 DOMParser
-        // Vẽ trực tiếp hình dáng vật thể 3D/2.5D, sơ đồ phát sóng, nhân vật hoặc bảng lịch phát sóng chuẩn tiếng Việt 100%
+        // Vẽ chính xác tuyệt đối đối tượng được nêu ở câu văn ngay phía trên trên nền trắng tinh khiết, KHÔNG CÓ CHI TIẾT THỪA
         const svgIllustratorPrompt = `Bạn là Họa sĩ Minh họa Sách giáo khoa Tiểu học Việt Nam chuyên nghiệp.
-NHIỆM VỤ BẮT BUỘC: Hãy vẽ MỘT HÌNH ẢNH MINH HỌA ĐỒ HỌA TRỰC QUAN, SỐNG ĐỘNG, CHÍNH XÁC TUYỆT ĐỐI 100% bằng mã SVG (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" width="760" height="420">...</svg>) thể hiện đúng nội dung câu văn ngay phía trên:
+NHIỆM VỤ BẮT BUỘC: Hãy vẽ MỘT HÌNH ẢNH MINH HỌA ĐỒ HỌA TRỰC QUAN, CHÍNH XÁC TUYỆT ĐỐI 100%, KHÔNG CÓ CHI TIẾT THỪA bằng mã SVG (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" width="760" height="420">...</svg>) thể hiện đúng nội dung câu văn ngay phía trên:
 
-1. Môn học & Bài học: "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
+1. Môn học & Bài học hiện tại: "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
 2. Câu văn hoạt động của Giáo viên ngay phía trên hình ảnh:
    "${immediatePrecedingLine || cleanDesc}"
-3. Chi tiết đối tượng / kênh hình SGK cần vẽ:
+3. Đối tượng / kênh hình cụ thể cần vẽ:
    "${cleanDesc}"
 
-YÊU CẦU ĐỒ HỌA BẮT BUỘC (TUÂN THỦ NGHIÊM NGẶT):
-- TUYỆT ĐỐI KHÔNG vẽ khung hộp văn bản chép lại lời mô tả! Phải VẼ HÌNH ẢNH ĐỒ HỌA TRỰC QUAN của chính sự vật, thiết bị, con người, mối quan hệ kỹ thuật hoặc bảng biểu được nhắc đến!
-- Cụ thể:
-  + Nếu nội dung là VẬT THỂ / THIẾT BỊ / HỌC CỤ (như máy thu thanh radio, ti vi, quạt điện, đèn học, máy tính, bàn phím, chuột, rô-bốt, bộ lắp ghép, cây hoa, dụng cụ...): Hãy vẽ hình dáng 3D/2.5D chi tiết, chân thực của thiết bị/vật thể đó (có vỏ máy, màn hình, nút bấm, loa, ăng-ten, cánh quạt, bóng đèn...) bằng các thẻ <path>, <rect>, <circle>, <ellipse>, <polygon>, <linearGradient>, <radialGradient> kèm mũi tên chỉ dẫn vào các bộ phận rõ ràng.
-  + Nếu nội dung là MỐI QUAN HỆ GIỮA ĐÀI PHÁT THANH VÀ MÁY THU THANH (Hình 2 SGK): Bên trái vẽ tòa nhà Đài phát thanh + phát thanh viên trước micro + tháp ăng-ten cao phát ra các vòng sóng vô tuyến lan tỏa trên bầu trời (có mũi tên truyền sóng); bên phải vẽ chiếc Máy thu thanh (Radio có ăng-ten, loa, núm xoay) đặt trên bàn đang thu sóng và phát ra âm thanh/lời nói qua loa.
-  + Nếu nội dung là BẢNG DANH MỤC CHƯƠNG TRÌNH VOV1 / VOV2 (Hình 3 SGK) hoặc ĐỐI CHIẾU CỘT GIỜ PHÁT SÓNG VOV2: Vẽ rõ bảng lịch phát sóng với các dòng khung giờ và tên chương trình chuẩn SGK (VD: 09:30 hoặc 12:35 Ca nhạc thiếu nhi, 13:00 hoặc 14:00 Đọc truyện dài kì, 06:30 Sống an toàn, 07:30 Nhịp sống văn hóa...), nếu câu trên yêu cầu chú ý các chương trình thiếu nhi trên VOV2 thì khoanh khung viền đỏ nổi bật quanh các dòng chương trình đó.
-  + Nếu nội dung là HAI BẠN HỌC SINH ĐANG CHIA SẺ CHƯƠNG TRÌNH YÊU THÍCH: Vẽ trực quan 2 bạn học sinh tiểu học (nam và nữ) ngồi đối diện trò chuyện vui vẻ cạnh chiếc máy thu thanh, phía trên có bóng hội thoại (speech bubble) ghi câu mẫu chia sẻ chương trình phát thanh yêu thích.
+NGUYÊN TẮC ĐỒ HỌA NGHIÊM NGẶT (CẤM TUYỆT ĐỐI CHI TIẾT THỪA):
+- Nền trắng sạch (#FFFFFF). CHỈ VẼ ĐÚNG DUY NHẤT đối tượng, thiết bị, sản phẩm, sơ đồ mối quan hệ hoặc bảng biểu được nhắc đến trong mục (2) và (3) của bài học "${lessonTitle}".
+- TUYỆT ĐỐI KHÔNG vẽ thêm bất kỳ đồ vật phụ nào không được nhắc tới (không vẽ thêm đèn bàn, ổ cắm, sách vở thừa, cây cối hay đồ trang trí ngoài lề).
+- TUYỆT ĐỐI KHÔNG vẽ thanh tiêu đề/banner ở đầu ảnh (như "MINH HỌA TRỰC QUAN..."), KHÔNG ghi dòng trích dẫn ở cuối ảnh (như "Trích SGK..."), KHÔNG vẽ icon trang trí ở góc bảng, KHÔNG vẽ khung hộp văn bản chép lại đề bài.
+- Nếu nội dung là vật thể/thiết bị/sản phẩm thực hành: Vẽ hình khối 2.5D/3D trực quan, cân đối ở chính giữa khung hình bằng <path>, <rect>, <circle>, <ellipse>, <polygon>, <linearGradient> rõ nét.
+- Nếu nội dung là mối quan hệ giữa đài phát thanh và máy thu thanh: Bên trái vẽ đài phát thanh và tháp ăng-ten phát sóng vô tuyến lan tỏa kèm mũi tên truyền sóng sang bên phải là chiếc máy thu thanh (radio) thu sóng và phát âm thanh ra loa.
+- Nếu nội dung là bảng danh mục chương trình VOV1 / VOV2: Chỉ vẽ bảng lịch phát sóng gọn gàng, rõ nét với các khung giờ và tên chương trình chuẩn SGK (khoanh viền đỏ các chương trình thiếu nhi nếu câu văn phía trên yêu cầu đối chiếu).
 - Chỉ trả về DUY NHẤT mã <svg ...>...</svg>, không có markdown hay lời giải thích.`;
 
         const svgModels = [
@@ -488,7 +500,7 @@ YÊU CẦU ĐỒ HỌA BẮT BUỘC (TUÂN THỦ NGHIÊM NGẶT):
             const modelName = svgModels[attempt];
             try {
                 const config: any = {
-                    temperature: 0.2,
+                    temperature: 0.15,
                     maxOutputTokens: 8192
                 };
                 if (modelName === 'gemini-2.5-flash') {
@@ -522,10 +534,10 @@ YÊU CẦU ĐỒ HỌA BẮT BUỘC (TUÂN THỦ NGHIÊM NGẶT):
 
         return null;
     })().finally(() => {
-        inFlightAiTasks.delete(cacheKeys.pureDescKey);
+        inFlightAiTasks.delete(cacheKeys.taskKey);
     });
 
-    inFlightAiTasks.set(cacheKeys.pureDescKey, taskPromise);
+    inFlightAiTasks.set(cacheKeys.taskKey, taskPromise);
     return taskPromise;
 };
 
@@ -550,7 +562,7 @@ export const renderPedagogicalIllustrationDataUrl = (
 
     // Tự động kích hoạt AI chuyển văn bản thành hình ảnh nếu chưa có trong bộ nhớ đệm
     const activeKey = resolveActiveApiKey();
-    if (activeKey && !inFlightAiTasks.has(cacheKeys.pureDescKey)) {
+    if (activeKey && !inFlightAiTasks.has(cacheKeys.taskKey)) {
         generateSingleIllustrationWithAI(
             immediateContextLine,
             cleanDesc,
@@ -602,7 +614,7 @@ export const pregenerateLessonImagesWithAI = async (
         cleanDesc: string;
         lessonTitle: string;
     }> = [];
-    const seenPureDescKeys = new Set<string>();
+    const seenTaskKeys = new Set<string>();
 
     for (const period of plan.periods) {
         const lessonTitle = plan.lesson_full_title || '';
@@ -625,10 +637,10 @@ export const pregenerateLessonImagesWithAI = async (
                         );
 
                         if (
-                            !seenPureDescKeys.has(cacheKeys.pureDescKey) &&
+                            !seenTaskKeys.has(cacheKeys.taskKey) &&
                             !lookupFromAiCache(cacheKeys)
                         ) {
-                            seenPureDescKeys.add(cacheKeys.pureDescKey);
+                            seenTaskKeys.add(cacheKeys.taskKey);
                             tasks.push({
                                 immediatePrecedingLine: runningTeacherLineInActivity,
                                 cleanDesc,

@@ -521,6 +521,8 @@ export const ensureFourActivitiesInAllPeriods = (
  * - Tự động escape các ký tự xuống dòng (\n, \r, \t) và dấu ngoặc kép chưa escape bên trong chuỗi tiếng Việt
  * - Tự động đóng chuỗi và đóng ngoặc (], }) nếu phản hồi JSON dài bị ngắt quãng ở cuối
  */
+const KNOWN_JSON_KEYS_REGEX = /^"(lesson_full_title|week|grade_class|subject|date_range|periods|period_number|objectives|materials|teacher|student|activities|time|name|topic|rows)"\s*:/;
+
 const repairAndExtractJSON = (rawText: string): string => {
     const cleaned = (rawText || '')
         .replace(/```json/gi, '')
@@ -535,8 +537,9 @@ const repairAndExtractJSON = (rawText: string): string => {
     const src = cleaned.slice(firstBrace);
     let out = '';
     let inString = false;
+    let currentStringIsKey = false;
     let escaped = false;
-    const stack: Array<'}' | ']'> = [];
+    const stack: Array<{ close: '}' | ']'; expectingKey: boolean }> = [];
 
     const nextNonSpaceChar = (fromIdx: number): { ch: string; idx: number } => {
         for (let k = fromIdx; k < src.length; k++) {
@@ -579,33 +582,49 @@ const repairAndExtractJSON = (rawText: string): string => {
                 continue;
             }
             if (ch === '"') {
-                // Kiểm tra xem dấu " này có thực sự là dấu đóng chuỗi JSON hay là dấu ngoặc kép trong câu văn tiếng Việt
+                // Kiểm tra chính xác dấu " này là dấu đóng chuỗi cấu trúc JSON hay là dấu ngoặc kép nằm trong câu tiếng Việt (VD: "Tốt", "Đạt": ...)
                 const { ch: nextCh, idx: nextIdx } = nextNonSpaceChar(i + 1);
+                const topContainer = stack[stack.length - 1];
                 let isStructuralClose = false;
 
-                if (nextCh === '' || nextCh === ':' || nextCh === '}' || nextCh === ']') {
+                if (nextCh === '') {
                     isStructuralClose = true;
-                } else if (nextCh === ',') {
-                    const afterComma = nextNonSpaceChar(nextIdx + 1).ch;
-                    const topContainer = stack[stack.length - 1];
-                    if (topContainer === '}') {
-                        // Trong object JSON, sau dấu phẩy bắt buộc phải là dấu " (key tiếp theo) hoặc }
-                        isStructuralClose = afterComma === '"' || afterComma === '}' || afterComma === '';
-                    } else if (topContainer === ']') {
-                        // Trong array JSON, sau dấu phẩy phải là phần tử tiếp theo (", {, [, số, true, false, null, ])
-                        isStructuralClose =
-                            afterComma === '"' ||
-                            afterComma === '{' ||
-                            afterComma === '[' ||
-                            afterComma === ']' ||
-                            afterComma === '';
-                    } else {
+                } else if (currentStringIsKey) {
+                    // Nếu đang đọc tên key của object JSON, dấu " đóng key chỉ khi ký tự tiếp theo là ':'
+                    isStructuralClose = nextCh === ':';
+                } else if (topContainer?.close === '}') {
+                    // Đang đọc giá trị (value) của một thuộc tính trong object JSON:
+                    // Dấu " đóng value CHỈ khi theo sau là '}' HOẶC ',' rồi đến một key chuẩn của schema (hoặc '}')
+                    if (nextCh === '}') {
                         isStructuralClose = true;
+                    } else if (nextCh === ',') {
+                        const afterCommaInfo = nextNonSpaceChar(nextIdx + 1);
+                        const restFromAfterComma = src.slice(afterCommaInfo.idx, afterCommaInfo.idx + 40);
+                        isStructuralClose =
+                            afterCommaInfo.ch === '}' ||
+                            afterCommaInfo.ch === '' ||
+                            KNOWN_JSON_KEYS_REGEX.test(restFromAfterComma);
                     }
+                } else if (topContainer?.close === ']') {
+                    // Đang đọc phần tử chuỗi trong mảng (VD: mảng "objectives"):
+                    if (nextCh === ']') {
+                        isStructuralClose = true;
+                    } else if (nextCh === ',') {
+                        const afterCommaInfo = nextNonSpaceChar(nextIdx + 1);
+                        const restFromAfterComma = src.slice(afterCommaInfo.idx, afterCommaInfo.idx + 20);
+                        isStructuralClose =
+                            afterCommaInfo.ch === ']' ||
+                            afterCommaInfo.ch === '{' ||
+                            afterCommaInfo.ch === '' ||
+                            /^"\s*[-–+*]/.test(restFromAfterComma);
+                    }
+                } else {
+                    isStructuralClose = nextCh === '}' || nextCh === ']';
                 }
 
                 if (isStructuralClose) {
                     inString = false;
+                    currentStringIsKey = false;
                     out += '"';
                 } else {
                     out += '\\"';
@@ -614,14 +633,26 @@ const repairAndExtractJSON = (rawText: string): string => {
             }
             out += ch;
         } else {
+            const topContainer = stack[stack.length - 1];
             if (ch === '"') {
                 inString = true;
+                currentStringIsKey = Boolean(topContainer && topContainer.close === '}' && topContainer.expectingKey);
                 out += '"';
+            } else if (ch === ':') {
+                if (topContainer && topContainer.close === '}') {
+                    topContainer.expectingKey = false;
+                }
+                out += ':';
+            } else if (ch === ',') {
+                if (topContainer && topContainer.close === '}') {
+                    topContainer.expectingKey = true;
+                }
+                out += ',';
             } else if (ch === '{') {
-                stack.push('}');
+                stack.push({ close: '}', expectingKey: true });
                 out += '{';
             } else if (ch === '[') {
-                stack.push(']');
+                stack.push({ close: ']', expectingKey: false });
                 out += '[';
             } else if (ch === '}' || ch === ']') {
                 out = out.replace(/,\s*$/, '');
@@ -650,17 +681,14 @@ const repairAndExtractJSON = (rawText: string): string => {
     }
 
     while (stack.length > 0) {
-        const expectedClose = stack.pop()!;
+        const expectedClose = stack.pop()!.close;
         out = out.replace(/,\s*$/, '');
         if (expectedClose === '}') {
-            // Nếu bị ngắt ngay sau dấu hai chấm (VD: "student": ) -> điền ""
             if (/:\s*$/.test(out)) {
                 out += '""';
             } else if (/\{\s*"[^"]*"\s*$/.test(out)) {
-                // Nếu bị ngắt ngay sau tên key đầu tiên chưa có dấu hai chấm (VD: {"teacher") -> xóa key dở dang
                 out = out.replace(/"[^"]*"\s*$/, '');
             } else if (/,\s*"[^"]*"\s*$/.test(out)) {
-                // Nếu bị ngắt ngay sau tên key tiếp theo chưa có dấu hai chấm (VD: , "student") -> xóa key dở dang
                 out = out.replace(/,\s*"[^"]*"\s*$/, '');
             }
         }
@@ -2091,11 +2119,11 @@ export const enrichWeekPlansWithPedagogy = (lessons: any[]): any[] => {
                 enriched[weekIdx].totalPeriodsInLesson = totalPeriodsAcrossWeeks;
 
                 if (periodNum === 1) {
-                    enriched[weekIdx].pedagogicalNote = `Tiết 1/${totalPeriodsAcrossWeeks}: Nửa đầu SGK (Khởi động chung, Khám phá Mục 1, Luyện tập 1, Vận dụng ngắn)`;
+                    enriched[weekIdx].pedagogicalNote = `Tiết 1/${totalPeriodsAcrossWeeks}: Phần đầu bài học SGK (Khởi động chung, Khám phá nội dung 1, Luyện tập 1, Vận dụng)`;
                 } else if (periodNum === totalPeriodsAcrossWeeks) {
-                    enriched[weekIdx].pedagogicalNote = `Tiết ${periodNum}/${totalPeriodsAcrossWeeks}: Nửa sau SGK (Khởi động kết nối ôn lại tiết trước, Khám phá Mục ${periodNum}, Luyện tập ${periodNum}, Vận dụng toàn bài)`;
+                    enriched[weekIdx].pedagogicalNote = `Tiết ${periodNum}/${totalPeriodsAcrossWeeks}: Phần cuối bài học SGK (Khởi động kết nối tiết trước, Hoàn thiện nội dung/Trưng bày & Đánh giá sản phẩm, Luyện tập, Vận dụng toàn bài)`;
                 } else {
-                    enriched[weekIdx].pedagogicalNote = `Tiết ${periodNum}/${totalPeriodsAcrossWeeks}: Phần tiếp theo của SGK (Khởi động ôn lại tiết trước, Khám phá Mục ${periodNum}, Luyện tập ${periodNum}, Vận dụng)`;
+                    enriched[weekIdx].pedagogicalNote = `Tiết ${periodNum}/${totalPeriodsAcrossWeeks}: Phần tiếp theo của SGK (Khởi động ôn lại tiết trước, Khám phá/Thực hành bước tiếp theo, Luyện tập, Vận dụng)`;
                 }
             });
         } else {
