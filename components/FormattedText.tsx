@@ -107,7 +107,7 @@ const FormattedText: React.FC<Props> = ({
                 }
 
                 const cleanText = trimmedLine.replace(/\*\*/g, '');
-                runningContext = `${runningContext} ${cleanText}`.trim();
+                runningContext = `${runningContext}\n${cleanText}`.trim();
 
                 return (
                     <div key={index} style={baseStyle}>

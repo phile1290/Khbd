@@ -229,26 +229,26 @@ export const generateLessonPlan = async ({
         Bài học "${baseLessonName}" có tổng thời lượng là ${totalLessonPeriods} tiết theo Phân phối chương trình (mỗi tuần dạy 1 tiết).
         ${totalLessonPeriods > 1 ? `
         - VỊ TRÍ TIẾT DẠY HIỆN TẠI: ĐÂY LÀ TIẾT ${currentPeriodInLesson} / TỔNG SỐ ${totalLessonPeriods} TIẾT CỦA BÀI HỌC (Tuần ${inputData.week || '...'}).
-        - CHỈ SOẠN DUY NHẤT 1 TIẾT NÀY (TIẾT ${currentPeriodInLesson}), TUYỆT ĐỐI KHÔNG SOẠN GỘP CẢ 2 TIẾT TRONG CÙNG 1 TUẦN!
-        - BẮT BUỘC PHÂN BỔ NỘI DUNG SGK VÀ THỜI LƯỢNG CHÍNH XÁC (ĐỦ 4 HOẠT ĐỘNG):
+        - CHỈ SOẠN DUY NHẤT 1 TIẾT NÀY (TIẾT ${currentPeriodInLesson}), TUYỆT ĐỐI KHÔNG SOẠN GỘP CÁC TIẾT KHÁC TRONG CÙNG 1 TUẦN!
+        - BẮT BUỘC CHIA BÀI HỌC "${baseLessonName}" TRONG SGK THÀNH ${totalLessonPeriods} PHẦN TƯƠNG ỨNG VỚI ${totalLessonPeriods} TIẾT DẠY VÀ PHÂN BỔ CHÍNH XÁC (ĐỦ 4 HOẠT ĐỘNG):
           ${currentPeriodInLesson === 1 ? `
-          + BẠN ĐANG SOẠN RIÊNG TIẾT 1 (${totalDuration} phút - ĐỦ 4 HOẠT ĐỘNG):
-            * Mục I. Yêu cầu cần đạt: Chỉ ghi mục tiêu kiến thức, kỹ năng của NỬA ĐẦU BÀI HỌC (Mục 1 / Phần đầu của bài học trong SGK).
-            * Mục II. Đồ dùng dạy học: Thiết bị, học liệu cần cho Mục 1.
+          + BẠN ĐANG SOẠN RIÊNG TIẾT 1 / ${totalLessonPeriods} (${totalDuration} phút - ĐỦ 4 HOẠT ĐỘNG):
+            * Mục I. Yêu cầu cần đạt: Chỉ ghi mục tiêu kiến thức, kỹ năng của PHẦN 1 / MỤC 1 (Phần đầu của bài học trong SGK).
+            * Mục II. Đồ dùng dạy học: Thiết bị, học liệu cần cho Phần 1 / Mục 1.
             * 1. Hoạt động mở đầu: Tạo tâm thế hào hứng, dẫn nhập vào bài học bám sát tình huống mở đầu trong SGK.
-            * 2. Hoạt động hình thành kiến thức mới: Khám phá sâu sắc kiến thức trọng tâm của MỤC 1 / PHẦN ĐẦU trong SGK (đúng 100% các ý, tình huống, hình ảnh có trong SGK).
-            * 3. Hoạt động luyện tập, thực hành: Thực hành câu hỏi/bài tập thuộc phạm vi MỤC 1 / PHẦN ĐẦU trong SGK.
+            * 2. Hoạt động hình thành kiến thức mới: Khám phá sâu sắc kiến thức trọng tâm của PHẦN 1 / MỤC 1 trong SGK (đúng 100% các ý, tình huống, hình ảnh có trong SGK).
+            * 3. Hoạt động luyện tập, thực hành: Thực hành câu hỏi/bài tập thuộc phạm vi PHẦN 1 / MỤC 1 trong SGK.
             * 4. Hoạt động vận dụng, trải nghiệm: Vận dụng kiến thức vừa học ở Tiết 1 vào thực tế, củng cố và dặn dò chuẩn bị cho Tiết 2.
-            * CẤM TUYỆT ĐỐI: Không được dồn toàn bộ bài vào tiết 1, không dạy trước nội dung Mục 2 của Tiết 2, không bịa nội dung ngoài SGK và KHÔNG ĐƯỢC bỏ sót Hoạt động 4!
+            * CẤM TUYỆT ĐỐI: Không được dồn toàn bộ bài vào tiết 1, không dạy trước nội dung của các tiết sau, không bịa nội dung ngoài SGK và KHÔNG ĐƯỢC bỏ sót Hoạt động 4!
           ` : `
-          + BẠN ĐANG SOẠN RIÊNG TIẾT ${currentPeriodInLesson} (${totalDuration} phút - ĐỦ 4 HOẠT ĐỘNG):
-            * ĐÂY LÀ TIẾT ${currentPeriodInLesson} (TIẾT NỐI TIẾP) CỦA BÀI HỌC. HỌC SINH ĐÃ HỌC TIẾT TRƯỚC ĐÓ RỒI.
-            * Mục I. Yêu cầu cần đạt: Ghi mục tiêu của MỤC TIẾP THEO (Mục 2 / Phần tiếp theo của SGK) và năng lực vận dụng toàn bài.
-            * Mục II. Đồ dùng dạy học: Thiết bị, học liệu cần cho Mục 2 và bài thực hành/vận dụng.
-            * 1. Hoạt động mở đầu: BẮT BUỘC KHỞI ĐỘNG KẾT NỐI: Tổ chức trò chơi / câu hỏi để Học sinh NHẮC LẠI KIẾN THỨC ĐÃ HỌC Ở TIẾT 1, tạo cầu nối tự nhiên sang kiến thức mới của Tiết ${currentPeriodInLesson}.
-            * 2. Hoạt động hình thành kiến thức mới: Khám phá sâu sắc kiến thức MỤC 2 / PHẦN TIẾP THEO trong SGK (đúng 100% nội dung SGK). CẤM TUYỆT ĐỐI KHÔNG DẠY LẠI MỤC 1 ĐÃ HỌC Ở TIẾT 1!
-            * 3. Hoạt động luyện tập, thực hành: Thực hành các bài tập tiếp theo hoặc bài thực hành tổng hợp trong SGK. CẤM TUYỆT ĐỐI KHÔNG LẶP LẠI bài tập của Tiết 1!
-            * 4. Hoạt động vận dụng, trải nghiệm: Tổ chức hoạt động Vận dụng theo đúng SGK, liên hệ thực tiễn đời sống và dặn dò tổng kết bài học.
+          + BẠN ĐANG SOẠN RIÊNG TIẾT ${currentPeriodInLesson} / ${totalLessonPeriods} (${totalDuration} phút - ĐỦ 4 HOẠT ĐỘNG):
+            * ĐÂY LÀ TIẾT ${currentPeriodInLesson} (TIẾT NỐI TIẾP) CỦA BÀI HỌC. HỌC SINH ĐÃ HỌC TIẾT ${currentPeriodInLesson - 1} TRƯỚC ĐÓ RỒI.
+            * Mục I. Yêu cầu cần đạt: Ghi mục tiêu của PHẦN THỨ ${currentPeriodInLesson} / MỤC TIẾP THEO tương ứng trong SGK.
+            * Mục II. Đồ dùng dạy học: Thiết bị, học liệu cần cho phần nội dung của Tiết ${currentPeriodInLesson}.
+            * 1. Hoạt động mở đầu: BẮT BUỘC KHỞI ĐỘNG KẾT NỐI: Tổ chức trò chơi / câu hỏi để Học sinh NHẮC LẠI KIẾN THỨC ĐÃ HỌC Ở TIẾT ${currentPeriodInLesson - 1}, tạo cầu nối tự nhiên sang kiến thức mới của Tiết ${currentPeriodInLesson}.
+            * 2. Hoạt động hình thành kiến thức mới: Khám phá sâu sắc kiến thức PHẦN THỨ ${currentPeriodInLesson} / MỤC TIẾP THEO trong SGK (đúng 100% nội dung SGK). CẤM TUYỆT ĐỐI KHÔNG DẠY LẠI NỘI DUNG ĐÃ HỌC Ở CÁC TIẾT TRƯỚC!
+            * 3. Hoạt động luyện tập, thực hành: Thực hành các câu hỏi/bài tập thuộc đúng phạm vi phần nội dung của Tiết ${currentPeriodInLesson} trong SGK. CẤM TUYỆT ĐỐI KHÔNG LẶP LẠI bài tập của các tiết trước!
+            * 4. Hoạt động vận dụng, trải nghiệm: Tổ chức hoạt động Vận dụng theo đúng SGK cho phần nội dung Tiết ${currentPeriodInLesson}, liên hệ thực tiễn đời sống và dặn dò.
           `}
         ` : `
         - Bài học trọn vẹn 1 tiết (${totalDuration} phút): Bắt buộc phân bổ sâu sắc, đầy đủ cả 4 hoạt động (1. Hoạt động mở đầu, 2. Hoạt động hình thành kiến thức mới, 3. Hoạt động luyện tập, thực hành, 4. Hoạt động vận dụng, trải nghiệm) bám sát 100% nội dung bài học trong SGK.
@@ -286,9 +286,9 @@ export const generateLessonPlan = async ({
             - BẮT BUỘC NGUYÊN TẮC 1:1 NGANG HÀNG: Cột "Hoạt động của Giáo viên" có bao nhiêu gạch đầu dòng thì cột "Hoạt động của Học sinh" BẮT BUỘC có đúng bấy nhiêu gạch đầu dòng đáp lại tương ứng (Tỷ lệ 1:1 tuyệt đối).
         4. **HÌNH ẢNH TRỰC QUAN BÁM SÁT NỘI DUNG CÂU VĂN NGAY PHÍA TRÊN & KÊNH HÌNH SGK (BẮT BUỘC TỪ 3 ĐẾN 4 HÌNH / TIẾT):**
             - BẮT BUỘC có đúng **từ 3 đến 4 hình ảnh minh họa trực quan** trong tiết học này (phân bổ vào Hoạt động 1: 1 hình, Hoạt động 2: 1-2 hình, Hoạt động 3: 1 hình), CHỈ CÓ Ở CỘT GIÁO VIÊN, không dùng gạch đầu dòng trước thẻ hình ảnh.
-            - NGUYÊN TẮC BẤT DI BẤT DỊCH: Hình ảnh phải trực quan hóa chính xác VẬT THỂ, CÁC BỘ PHẬN CẤU TẠO, DỤNG CỤ, HỌC CỤ, MÔ HÌNH hoặc MÀN HÌNH GIAO DIỆN cụ thể được nhắc đến ở câu văn ngay phía trên nó và trong bài học "${baseLessonName}" của SGK. Mỗi bài học và mỗi phần có nội dung khác nhau nên hình ảnh phải mô tả riêng biệt, khớp 100% với câu văn ngay phía trên.
-            - TUYỆT ĐỐI KHÔNG mô tả theo kiểu sơ đồ tư duy (mindmap), đồ họa thông tin (infographic), sơ đồ khối chữ, phiếu học tập hay cảnh lớp học chung chung!
-            - Cú pháp: \`[Gợi ý hình ảnh: Mô tả trực quan, chân thực, rõ nét hình dáng và các thành phần của chính vật thể, dụng cụ, học cụ hoặc màn hình giao diện vừa nêu ở câu văn ngay phía trên]\`.
+            - NGUYÊN TẮC BẤT DI BẤT DỊCH: Hình ảnh phải trực quan hóa chính xác VẬT THỂ, CÁC BỘ PHẬN CẤU TẠO, MỐI QUAN HỆ KỸ THUẬT, BẢNG DANH MỤC CHƯƠNG TRÌNH, HỌC CỤ, MÔ HÌNH hoặc MÀN HÌNH GIAO DIỆN cụ thể được nhắc đến ở câu văn ngay phía trên nó và trong bài học "${baseLessonName}" của SGK. Nếu câu văn trên nhắc đến Hình số mấy trong SGK (VD: Hình 1 về mối quan hệ giữa đài phát thanh và máy thu thanh; Hình 3 về danh mục chương trình kênh VOV1 và VOV2; hoặc các chương trình phát thanh có trong Hình 3 mà em thích), thẻ gợi ý hình ảnh bắt buộc phải ghi rõ chi tiết nội dung cụ thể của chính Hình đó trong SGK!
+            - TUYỆT ĐỐI KHÔNG mô tả theo kiểu sơ đồ tư duy (mindmap), đồ họa thông tin (infographic), sơ đồ khối chữ chung chung, phiếu học tập hay cảnh lớp học!
+            - Cú pháp: \`[Gợi ý hình ảnh: Mô tả trực quan, chi tiết, rõ nét các thành phần và nội dung cụ thể của chính vật thể, bảng danh mục, mối quan hệ kỹ thuật hoặc hình SGK vừa nêu ở câu văn ngay phía trên]\`.
         5. **THỜI GIAN LINH HOẠT VÀ CHÍNH XÁC:**
             - Phân bổ thời gian linh hoạt, bám sát nội dung thực tế của 4 hoạt động (ví dụ đối với tiết ${totalDuration} phút: Mở đầu 4-5 phút, KT mới 12-15 phút, Luyện tập 11-14 phút, Vận dụng 4-5 phút).
             - BẮT BUỘC: Tổng số phút của cả 4 hoạt động cộng lại PHẢI BẰNG ĐÚNG CHÍNH XÁC ${totalDuration} phút.

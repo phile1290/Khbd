@@ -338,17 +338,33 @@ export const ensureFourActivitiesInAllPeriods = (
     };
 
     const enforceThreeToFourImagesInPeriod = (period: Period): Period => {
-        const activities = (period.activities || []).map(act => ({
-            ...act,
-            rows: (act.rows || []).map(r => ({ ...r }))
-        }));
-
         const splitLinesWithHints = (text: string): string[] =>
             (text || '')
                 .replace(/(\[Gợi ý hình ảnh:|Gợi ý hình ảnh:|\(Gợi ý hình ảnh:|\[Hình ảnh minh họa:|Hình ảnh minh họa:)/gi, '\n$1')
                 .split('\n')
                 .map(l => l.trim())
                 .filter(Boolean);
+
+        // Gộp các row chỉ chứa thẻ [Gợi ý hình ảnh: ...] đứng riêng lẻ vào ngay dưới câu lệnh của Giáo viên ở row liền trước
+        // để hình ảnh luôn nhận được chính xác 100% câu văn ngay phía trên nó
+        const activities = (period.activities || []).map(act => {
+            const mergedRows: Array<{ teacher: string; student: string }> = [];
+            for (const r of act.rows || []) {
+                const tLines = splitLinesWithHints(r.teacher || '');
+                const sTrimmed = (r.student || '').trim();
+                const isOnlyImageHints = tLines.length > 0 && tLines.every(l => isImageHintLine(l)) && !sTrimmed;
+                if (isOnlyImageHints && mergedRows.length > 0) {
+                    const prev = mergedRows[mergedRows.length - 1];
+                    prev.teacher = `${(prev.teacher || '').trim()}\n${tLines.join('\n')}`.trim();
+                } else {
+                    mergedRows.push({ teacher: r.teacher || '', student: r.student || '' });
+                }
+            }
+            return {
+                ...act,
+                rows: mergedRows
+            };
+        });
 
         const countPeriodImages = (): number => {
             let count = 0;
@@ -698,7 +714,11 @@ export const cleanPrefix = (text: string | null | undefined): string => {
  * đồng thời tách các dòng hình ảnh minh họa thành dòng riêng ngay dưới ý lệnh GV
  * và truyền nguyên vẹn ngữ cảnh ý lệnh GV phía trên (`precedingTeacher`) cho bộ vẽ hình ảnh.
  */
-export const alignContent = (teacherText: string, studentText: string) => {
+export const alignContent = (
+    teacherText: string,
+    studentText: string,
+    initialPrecedingTeacher: string = ''
+) => {
     const rawTLines = cleanPrefix(teacherText || '')
         .replace(/(\[Gợi ý hình ảnh:|Gợi ý hình ảnh:|\(Gợi ý hình ảnh:|\[Hình ảnh minh họa:|Hình ảnh minh họa:)/gi, '\n$1')
         .split('\n')
@@ -712,7 +732,9 @@ export const alignContent = (teacherText: string, studentText: string) => {
 
     const tGroups: Array<{ text: string; images: string[]; contextHistory: string }> = [];
     const leadingImages: string[] = [];
-    const recentTeacherLines: string[] = [];
+    const recentTeacherLines: string[] = initialPrecedingTeacher.trim()
+        ? [initialPrecedingTeacher.trim()]
+        : [];
 
     for (const line of rawTLines) {
         if (isImageHintLine(line)) {
@@ -724,7 +746,7 @@ export const alignContent = (teacherText: string, studentText: string) => {
             }
         } else {
             recentTeacherLines.push(line);
-            const contextWindow = recentTeacherLines.slice(-2).join(' ');
+            const contextWindow = recentTeacherLines.slice(-2).join('\n');
             tGroups.push({ text: line, images: [], contextHistory: contextWindow });
         }
     }
@@ -735,7 +757,7 @@ export const alignContent = (teacherText: string, studentText: string) => {
         alignedRows.push({
             teacher: imgLine,
             student: '',
-            precedingTeacher: recentTeacherLines.slice(0, 2).join(' ')
+            precedingTeacher: recentTeacherLines.slice(-2).join('\n')
         });
     }
 
@@ -1198,7 +1220,7 @@ const buildCellParagraphsFromText = (
                 })
             );
         } else {
-            runningContext = `${runningContext} ${line}`.trim();
+            runningContext = `${runningContext}\n${line}`.trim();
             paragraphs.push(
                 new Paragraph({
                     alignment: AlignmentType.JUSTIFIED,
@@ -1230,14 +1252,17 @@ const buildCellParagraphsFromText = (
  */
 export const generateLessonPlanDocxBlob = async (
     rawResult: LessonPlanResponse,
-    inputData: any
+    inputData: any,
+    skipAiPregen: boolean = false
 ): Promise<Blob> => {
     const result = ensureFourActivitiesInAllPeriods(rawResult, inputData);
-    await pregenerateLessonImagesWithAI(
-        result,
-        inputData?.apiKey || '',
-        result.lesson_full_title
-    ).catch(() => {});
+    if (!skipAiPregen) {
+        await pregenerateLessonImagesWithAI(
+            result,
+            inputData?.apiKey || '',
+            result.lesson_full_title
+        ).catch(() => {});
+    }
 
     const displayGrade = inputData?.grade || result.grade_class || '5';
     const displaySubject = inputData?.subject || result.subject || 'TIN HỌC';
@@ -1581,8 +1606,14 @@ export const generateLessonPlanDocxBlob = async (
                 })
             );
 
+            let lastTeacherLineInAct = '';
             actRows.forEach(row => {
-                const alignedSubRows = alignContent(row.teacher, row.student);
+                const alignedSubRows = alignContent(row.teacher, row.student, lastTeacherLineInAct);
+                alignedSubRows.forEach(sr => {
+                    if (sr.teacher && !isImageHintLine(sr.teacher) && !isActivityIntegrationLine(sr.teacher)) {
+                        lastTeacherLineInAct = sr.teacher;
+                    }
+                });
 
                 alignedSubRows.forEach(subRow => {
                     bodyRows.push(

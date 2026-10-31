@@ -61,6 +61,8 @@ const App: React.FC = () => {
     const [loadingSingle, setLoadingSingle] = useState<boolean>(false);
     const [isBatchGenerating, setIsBatchGenerating] = useState<boolean>(false);
     const [batchCurrentIndex, setBatchCurrentIndex] = useState<number>(-1);
+    const [isDownloadingZip, setIsDownloadingZip] = useState<boolean>(false);
+    const [zipProgress, setZipProgress] = useState<string>('');
     const abortBatchRef = useRef<boolean>(false);
     const [error, setError] = useState<string>('');
     const rightPanelRef = useRef<HTMLDivElement | null>(null);
@@ -335,15 +337,11 @@ const App: React.FC = () => {
                 uploadedFileCache: uploadedFileCacheRef.current
             });
 
-            // Tạo trước hình ảnh trực quan AI (nếu soạn lẻ thì đợi hoàn tất để hiển thị ngay, nếu soạn hàng loạt thì chạy nền để tốc độ soạn 35 tuần mượt mà)
-            if (isBatchMode) {
-                pregenerateLessonImagesWithAI(resultData, inputData.subject, inputData.grade, effectiveKey).catch(() => {});
-            } else {
-                try {
-                    await pregenerateLessonImagesWithAI(resultData, inputData.subject, inputData.grade, effectiveKey);
-                } catch {
-                    // Đã có bộ vẽ 3D trực quan fallback chuẩn xác
-                }
+            // Sử dụng Trí tuệ nhân tạo (AI) chuyển trực tiếp câu văn phía trên thành hình ảnh minh họa cho tiết học
+            try {
+                await pregenerateLessonImagesWithAI(resultData, inputData.subject, inputData.grade, effectiveKey);
+            } catch {
+                // Nếu mạng gián đoạn tạm thời, trình xem sẽ tự động gọi AI bổ sung khi hiển thị
             }
 
             updateWeekPlansState(prev =>
@@ -403,6 +401,8 @@ const App: React.FC = () => {
             return;
         }
 
+        const allAlreadyCompleted = weekPlansRef.current.every(w => w.status === 'completed' && !!w.result);
+
         setIsBatchGenerating(true);
         abortBatchRef.current = false;
         setActiveTab('list');
@@ -417,14 +417,21 @@ const App: React.FC = () => {
             const currentItem = weekPlansRef.current[i];
             if (!currentItem) continue;
 
-            // Bỏ qua các tuần đã hoàn thành trước đó
-            if (currentItem.status === 'completed' && currentItem.result) {
+            // Nếu chưa hoàn thành đủ tất cả các tuần thì chỉ soạn những tuần chưa hoàn thành hoặc bị lỗi
+            if (!allAlreadyCompleted && currentItem.status === 'completed' && currentItem.result) {
                 continue;
             }
 
             setBatchCurrentIndex(i);
             setSelectedWeekIndex(i);
-            await generateForWeekIndex(i, true);
+            const ok = await generateForWeekIndex(i, true);
+            // Tự động thử lại 1 lần nếu tuần gặp lỗi mạng tạm thời
+            if (!ok && !abortBatchRef.current) {
+                await new Promise(r => setTimeout(r, 800));
+                if (!abortBatchRef.current) {
+                    await generateForWeekIndex(i, true);
+                }
+            }
         }
 
         setIsBatchGenerating(false);
@@ -444,7 +451,11 @@ const App: React.FC = () => {
             return;
         }
         try {
-            const fileName = `KHBD_${item.week.replace(/\s+/g, '_')}_${item.lessonName.replace(/[\/\\?%*:|"<>]/g, '_')}`;
+            const periodTag =
+                item.totalPeriodsInLesson && item.totalPeriodsInLesson > 1
+                    ? `_Tiet_${item.periodIndexInLesson}`
+                    : '';
+            const fileName = `KHBD_${item.week.replace(/\s+/g, '_')}_${item.lessonName.replace(/[\/\\?%*:|"<>]/g, '_')}${periodTag}`;
             await downloadSingleLessonWord(
                 item.result,
                 {
@@ -468,46 +479,68 @@ const App: React.FC = () => {
     };
 
     const handleDownloadAllZip = async () => {
-        const completedPlans = weekPlansRef.current.filter(w => w.status === 'completed' && w.result);
+        const completedPlans = weekPlansRef.current
+            .map((w, idx) => ({ item: w, idx }))
+            .filter(entry => entry.item.status === 'completed' && !!entry.item.result);
+
         if (completedPlans.length === 0) {
             setError('Chưa có tuần nào được soạn hoàn thành để nén và tải về.');
             return;
         }
 
+        setIsDownloadingZip(true);
+        setError('');
         try {
             const zip = new JSZip();
             const effectiveKey = getEffectiveApiKey();
-            for (const item of completedPlans) {
+            for (let k = 0; k < completedPlans.length; k++) {
+                const { item, idx } = completedPlans[k];
+                setZipProgress(`${k + 1}/${completedPlans.length}`);
                 if (item.result) {
-                    const docxBlob = await generateLessonPlanDocxBlob(item.result, {
-                        ...inputData,
-                        apiKey: effectiveKey,
-                        week: item.week,
-                        lessonName: item.lessonName,
-                        baseLessonName: item.baseLessonName,
-                        periods: '1',
-                        periodIndexInLesson: item.periodIndexInLesson,
-                        totalPeriodsInLesson: item.totalPeriodsInLesson,
-                        pedagogicalNote: item.pedagogicalNote
-                    });
+                    const docxBlob = await generateLessonPlanDocxBlob(
+                        item.result,
+                        {
+                            ...inputData,
+                            apiKey: effectiveKey,
+                            week: item.week,
+                            lessonName: item.lessonName,
+                            baseLessonName: item.baseLessonName,
+                            periods: '1',
+                            periodIndexInLesson: item.periodIndexInLesson,
+                            totalPeriodsInLesson: item.totalPeriodsInLesson,
+                            pedagogicalNote: item.pedagogicalNote
+                        },
+                        false
+                    );
+                    const orderPrefix = String(idx + 1).padStart(2, '0');
+                    const safeWeek = item.week.replace(/[\/\\?%*:|"<>]/g, '_').replace(/\s+/g, '_').trim();
                     const safeLessonName = item.lessonName.replace(/[\/\\?%*:|"<>]/g, '_').trim();
-                    const fileName = `KHBD_${item.week.replace(/\s+/g, '_')}_${safeLessonName}.docx`;
+                    const periodSuffix =
+                        item.totalPeriodsInLesson && item.totalPeriodsInLesson > 1
+                            ? `_Tiet_${item.periodIndexInLesson}`
+                            : '';
+                    const fileName = `${orderPrefix}_KHBD_${safeWeek}_${safeLessonName}${periodSuffix}.docx`;
                     zip.file(fileName, docxBlob);
                 }
             }
 
+            setZipProgress('Đang nén...');
             const content = await zip.generateAsync({ type: 'blob' });
             const url = URL.createObjectURL(content);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `Ke_Hoach_Bai_Day_${completedPlans.length}_Tuan.zip`;
+            const safeSubj = (inputData.subject || 'Mon_Hoc').replace(/[\/\\?%*:|"<>]/g, '_').replace(/\s+/g, '_');
+            link.download = `Tron_Bo_KHBD_${safeSubj}_Lop_${inputData.grade || ''}_${completedPlans.length}_Tuan.zip`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
         } catch (err: any) {
             console.warn('Lỗi khi nén file zip:', err);
             setError('Có lỗi xảy ra khi tạo file nén ZIP: ' + (err?.message || ''));
+        } finally {
+            setIsDownloadingZip(false);
+            setZipProgress('');
         }
     };
 
@@ -1035,6 +1068,20 @@ const App: React.FC = () => {
                                         }
                                     </button>
                                 )}
+
+                                {completedCount > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={handleDownloadAllZip}
+                                        disabled={isDownloadingZip}
+                                        className="w-full py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                                    >
+                                        <Archive size={15} />
+                                        {isDownloadingZip
+                                            ? `Đang xuất file ZIP (${zipProgress})...`
+                                            : `TẢI VỀ TẤT CẢ CÁC TUẦN ĐÃ SOẠN (${completedCount} TUẦN - .ZIP)`}
+                                    </button>
+                                )}
                             </div>
 
                             {error && (
@@ -1157,11 +1204,14 @@ const App: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         onClick={handleDownloadAllZip}
-                                                        disabled={completedCount === 0}
+                                                        disabled={completedCount === 0 || isDownloadingZip}
                                                         className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold shadow-sm cursor-pointer transition-colors ${completedCount > 0 ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                                                         title="Nén tất cả các tuần đã soạn thành một file ZIP"
                                                     >
-                                                        <Archive size={14} /> Tải trọn bộ (.ZIP)
+                                                        <Archive size={14} />{' '}
+                                                        {isDownloadingZip
+                                                            ? `Đang nén (${zipProgress})...`
+                                                            : `Tải tất cả các tuần (${completedCount} tuần .ZIP)`}
                                                     </button>
                                                 </div>
                                             </div>
@@ -1337,6 +1387,21 @@ const App: React.FC = () => {
                                                     className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-bold transition-colors shadow-xs cursor-pointer"
                                                 >
                                                     <Download size={14} /> Tải {currentSelectedPlan.week} (.docx)
+                                                </button>
+                                            )}
+
+                                            {completedCount > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleDownloadAllZip}
+                                                    disabled={isDownloadingZip}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 text-white rounded hover:bg-emerald-800 text-xs font-bold transition-colors shadow-xs cursor-pointer"
+                                                    title="Tải về tất cả các tuần đã soạn trong 1 file nén .ZIP"
+                                                >
+                                                    <Archive size={14} />{' '}
+                                                    {isDownloadingZip
+                                                        ? `Đang nén (${zipProgress})...`
+                                                        : `Tải tất cả (${completedCount} tuần .ZIP)`}
                                                 </button>
                                             )}
                                         </div>

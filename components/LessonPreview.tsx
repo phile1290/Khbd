@@ -1,6 +1,7 @@
 import React from 'react';
 import { LessonPlanResponse, Period } from '../types';
 import { formatActivityName, formatTopicName, alignContent, formatObjectives, formatLessonTitleWithPeriod, paginateActivityRowsForWordPages, ensureFourActivitiesInAllPeriods, extractExplicitPeriodNumber, extractIntegrationPrefixFromObjectives } from '../utils';
+import { isImageHintLine } from '../utils/lessonImageGenerator';
 import FormattedText from './FormattedText';
 
 interface Props {
@@ -186,9 +187,13 @@ const LessonPreview: React.FC<Props> = ({ result: rawResult, inputData, id }) =>
                                 const actRows = act.rows || [];
                                 const formattedActName = formatActivityName(act.name);
                                 const formattedTopic = act.topic ? formatTopicName(act.topic) : '';
+                                let lastTeacherLineInAct = '';
                                 actRows.forEach((row, rowIndex) => {
-                                    const alignedSubRows = alignContent(row.teacher, row.student);
+                                    const alignedSubRows = alignContent(row.teacher, row.student, lastTeacherLineInAct);
                                     alignedSubRows.forEach((subRow, subRowIndex) => {
+                                        if (subRow.teacher && !isImageHintLine(subRow.teacher)) {
+                                            lastTeacherLineInAct = subRow.teacher;
+                                        }
                                         const isFirstRowOfActivity = rowIndex === 0 && subRowIndex === 0;
                                         const isLastRowOfActivity = rowIndex === actRows.length - 1 && subRowIndex === alignedSubRows.length - 1;
                                         const timeText = isFirstRowOfActivity ? (act.time || '').replace(/phút/gi, "'").replace(/\s/g, '') : '';
