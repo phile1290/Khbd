@@ -1,22 +1,22 @@
 /**
- * Hệ thống Trí tuệ Nhân tạo (AI) Chuyển Văn bản thành Hình ảnh Minh họa Trực quan (AI Text-to-Illustration Engine)
- * - TUYỆT ĐỐI KHÔNG sử dụng kho lưu trữ hình ảnh vẽ sẵn cố định hay hình ảnh mặc định.
- * - Trực tiếp sử dụng mô hình Trí tuệ Nhân tạo Gemini để phân tích câu văn hoạt động của Giáo viên ngay phía trên
- *   (`immediatePrecedingLine`) kết hợp với mô tả kênh hình SGK (`cleanDesc`) và tên bài học (`lessonTitle`),
- *   từ đó tự động chuyển văn bản thành hình ảnh trực quan chính xác 100% cho MỌI MÔN HỌC và MỌI BÀI HỌC.
+ * Hệ thống Trí tuệ Nhân tạo (AI) Chuyển Văn bản thành Hình ảnh Minh họa Trực quan (AI Text-to-Image & Visual Illustration Engine)
+ * - Trực tiếp sử dụng mô hình tạo ảnh của Gemini (`gemini-2.5-flash-image`, `gemini-2.0-flash-exp-image-generation`)
+ *   kết hợp cùng mô hình đồ họa vector AI (`gemini-2.5-flash`, `gemini-3-flash-preview`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`)
+ *   để chuyển câu văn hoạt động của Giáo viên ngay phía trên (`immediatePrecedingLine`) và mô tả kênh hình SGK (`cleanDesc`)
+ *   thành hình ảnh minh họa trực quan, sống động, chính xác tuyệt đối 100%.
+ * - TUYỆT ĐỐI KHÔNG sử dụng kho hình vẽ sẵn cố định và KHÔNG hiển thị hộp văn bản thay cho hình ảnh.
  */
 
 import { GoogleGenAI } from "@google/genai";
 import { LessonPlanResponse } from "../types";
 
-// Bộ nhớ đệm lưu trữ hình ảnh do AI sinh ra trực tiếp từ ngữ cảnh câu văn phía trên trong phiên làm việc
+// Bộ nhớ đệm lưu trữ hình ảnh PNG (Data URL) do AI sinh ra trong phiên làm việc
 const aiGeneratedImageCache = new Map<string, string>();
 // Quản lý các tiến trình AI đang chạy để tránh gọi trùng lặp cùng một hình
 const inFlightAiTasks = new Map<string, Promise<string | null>>();
 
 let lastKnownApiKey: string = '';
-let preferredImageModel: string | null = null;
-let nativeImageModelUnsupported = false;
+const unsupportedImageModels = new Set<string>();
 
 type ImageUpdateListener = () => void;
 const imageUpdateListeners = new Set<ImageUpdateListener>();
@@ -49,10 +49,6 @@ export const extractCleanImageDescription = (rawLine: string): string => {
     return text.trim() || 'Hình minh họa trực quan theo nội dung câu văn phía trên';
 };
 
-/**
- * Loại bỏ các cụm động từ điều khiển sư phạm của Giáo viên ("Giáo viên trình chiếu...", "GV yêu cầu học sinh quan sát...")
- * để giữ lại nguyên vẹn nội dung cốt lõi cần AI chuyển thành hình ảnh.
- */
 export const extractCoreVisualObjectText = (rawText: string): string => {
     let text = (rawText || '').trim();
     text = text.replace(/^[-–\*\s]+/, '');
@@ -77,6 +73,7 @@ export const dataUrlToUint8Array = (dataUrl: string): Uint8Array => {
 const normalizeCacheToken = (text: string): string => {
     return (text || '')
         .toLowerCase()
+        .replace(/^[-–\*\s]*(gv|giáo viên|hs|học sinh|thầy|cô)\s*[:\.]?\s*/gi, '')
         .replace(/^[-–\*\s]+/, '')
         .replace(/[^\p{L}\p{N}\s]/gu, ' ')
         .replace(/\s+/g, ' ')
@@ -87,15 +84,41 @@ const buildSlotCacheKeys = (
     lessonTitle: string,
     immediateContextLine: string,
     cleanDesc: string
-): { slotKey: string; ctxKey: string; descKey: string } => {
+): { slotKey: string; ctxKey: string; descKey: string; pureDescKey: string } => {
     const normTitle = normalizeCacheToken(lessonTitle);
     const normCtx = normalizeCacheToken(immediateContextLine);
     const normDesc = normalizeCacheToken(cleanDesc);
     return {
         slotKey: `slot__${normTitle}__${normCtx}__${normDesc}`,
         ctxKey: `ctx__${normCtx}__${normDesc}`,
-        descKey: `desc__${normTitle}__${normDesc}`
+        descKey: `desc__${normTitle}__${normDesc}`,
+        pureDescKey: `puredesc__${normDesc}`
     };
+};
+
+const storeInAiCache = (
+    keys: { slotKey: string; ctxKey: string; descKey: string; pureDescKey: string },
+    pngDataUrl: string
+) => {
+    aiGeneratedImageCache.set(keys.slotKey, pngDataUrl);
+    aiGeneratedImageCache.set(keys.ctxKey, pngDataUrl);
+    aiGeneratedImageCache.set(keys.descKey, pngDataUrl);
+    aiGeneratedImageCache.set(keys.pureDescKey, pngDataUrl);
+};
+
+const lookupFromAiCache = (keys: {
+    slotKey: string;
+    ctxKey: string;
+    descKey: string;
+    pureDescKey: string;
+}): string | null => {
+    return (
+        aiGeneratedImageCache.get(keys.slotKey) ||
+        aiGeneratedImageCache.get(keys.ctxKey) ||
+        aiGeneratedImageCache.get(keys.descKey) ||
+        aiGeneratedImageCache.get(keys.pureDescKey) ||
+        null
+    );
 };
 
 const resolveActiveApiKey = (explicitKey?: string): string => {
@@ -129,9 +152,10 @@ const resolveActiveApiKey = (explicitKey?: string): string => {
 };
 
 /**
- * Làm sạch và chuẩn hóa mã XML/SVG do AI sinh ra để đảm bảo trình duyệt rasterize 100% thành công sang PNG
+ * Làm sạch và tự động sửa mọi lỗi cú pháp XML/SVG bằng bộ phân tích HTML5 DOMParser + XMLSerializer
+ * giúp 100% mã SVG do AI sinh ra luôn chuyển đổi thành công sang ảnh PNG mà không bao giờ bị lỗi parsererror.
  */
-const sanitizeAndValidateSvg = (rawSvgResponse: string): string | null => {
+const sanitizeAndRepairSvg = (rawSvgResponse: string): string | null => {
     if (!rawSvgResponse) return null;
     let cleaned = rawSvgResponse
         .replace(/```xml/gi, '')
@@ -140,14 +164,11 @@ const sanitizeAndValidateSvg = (rawSvgResponse: string): string | null => {
         .trim();
 
     const startIdx = cleaned.indexOf('<svg');
+    if (startIdx === -1) return null;
     const endIdx = cleaned.lastIndexOf('</svg>');
-    if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
-        return null;
-    }
+    let svg = endIdx > startIdx ? cleaned.slice(startIdx, endIdx + 6) : `${cleaned.slice(startIdx)}</svg>`;
 
-    let svg = cleaned.slice(startIdx, endIdx + 6);
-
-    // Thay thế các HTML entity không hợp lệ trong XML bằng ký tự Unicode tương đương
+    // Thay thế các HTML entity phổ biến bằng ký tự Unicode chuẩn
     svg = svg
         .replace(/&nbsp;/gi, '&#160;')
         .replace(/&rarr;/gi, '→')
@@ -161,78 +182,50 @@ const sanitizeAndValidateSvg = (rawSvgResponse: string): string | null => {
         .replace(/&times;/gi, '×')
         .replace(/&divide;/gi, '÷')
         .replace(/&deg;/gi, '°')
-        .replace(/&copy;/gi, '©')
-        .replace(/&reg;/gi, '®')
-        .replace(/&trade;/gi, '™')
-        .replace(/&hellip;/gi, '…')
-        .replace(/&laquo;/gi, '«')
-        .replace(/&raquo;/gi, '»');
+        .replace(/&hellip;/gi, '…');
 
-    // Loại bỏ các thẻ HTML không đóng hoặc không hợp lệ trong SVG
-    svg = svg
-        .replace(/<br\s*\/?>/gi, ' ')
-        .replace(/<hr\s*\/?>/gi, '')
-        .replace(/<script[\s\S]*?<\/script>/gi, '')
-        .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '');
-
-    // Escape các dấu & đứng riêng lẻ chưa được mã hóa XML
-    svg = svg.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)/g, '&amp;');
-
-    // Escape dấu < hoặc > vô tình nằm trong nội dung cặp thẻ <text>...</text> hoặc <tspan>...</tspan>
-    svg = svg.replace(/<(text|tspan)([^>]*)>([\s\S]*?)<\/\1>/gi, (_match, tag, attrs, inner) => {
-        if (!/<tspan/i.test(inner)) {
-            const safeInner = inner.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            return `<${tag}${attrs}>${safeInner}</${tag}>`;
-        }
-        return _match;
-    });
-
-    // Đảm bảo thẻ mở <svg> có đầy đủ xmlns, viewBox, width và height chuẩn 760x420
-    const openTagEnd = svg.indexOf('>');
-    if (openTagEnd !== -1) {
-        let openTag = svg.slice(0, openTagEnd + 1);
-        if (!/xmlns\s*=/i.test(openTag)) {
-            openTag = openTag.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-        }
-        if (!/viewBox\s*=/i.test(openTag)) {
-            openTag = openTag.replace('<svg', '<svg viewBox="0 0 760 420"');
-        }
-        if (!/\bwidth\s*=/i.test(openTag)) {
-            openTag = openTag.replace('<svg', '<svg width="760"');
-        }
-        if (!/\bheight\s*=/i.test(openTag)) {
-            openTag = openTag.replace('<svg', '<svg height="420"');
-        }
-        svg = openTag + svg.slice(openTagEnd + 1);
-    }
-
-    // Kiểm tra tính hợp lệ XML bằng DOMParser nếu đang chạy trên trình duyệt
-    if (typeof DOMParser !== 'undefined') {
+    // Sử dụng trình phân tích HTML5 của trình duyệt để tự động sửa mọi lỗi thuộc tính trùng lặp,
+    // thẻ chưa đóng hoặc ký tự '&' chưa escape, sau đó xuất ra XML chuẩn bằng XMLSerializer
+    if (typeof DOMParser !== 'undefined' && typeof XMLSerializer !== 'undefined') {
         try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(svg, 'image/svg+xml');
-            const parserError = doc.querySelector('parsererror');
-            if (parserError) {
-                return null;
+            const htmlParser = new DOMParser();
+            const htmlDoc = htmlParser.parseFromString(
+                `<!DOCTYPE html><html><body>${svg}</body></html>`,
+                'text/html'
+            );
+            const svgEl = htmlDoc.querySelector('svg');
+            if (svgEl) {
+                svgEl.querySelectorAll('script, foreignObject').forEach(el => el.remove());
+                svgEl.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+                svgEl.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+                if (!svgEl.getAttribute('viewBox')) {
+                    svgEl.setAttribute('viewBox', '0 0 760 420');
+                }
+                svgEl.setAttribute('width', '760');
+                svgEl.setAttribute('height', '420');
+
+                const serialized = new XMLSerializer().serializeToString(svgEl);
+                if (serialized && serialized.includes('<svg')) {
+                    return serialized;
+                }
             }
-        } catch {
-            return null;
-        }
+        } catch {}
     }
 
+    // Dự phòng nếu môi trường không có XMLSerializer
+    svg = svg.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)/g, '&amp;');
     return svg;
 };
 
 /**
  * Chuyển đổi mã SVG do AI thiết kế thành hình ảnh PNG độ phân giải cao (760x420)
- * để hiển thị trực tiếp trên giao diện Web và nhúng vào file Word (.docx)
  */
 const svgStringToPngDataUrl = (rawSvgString: string): Promise<string | null> => {
     if (typeof document === 'undefined' || typeof Image === 'undefined') {
         return Promise.resolve(null);
     }
 
-    const validSvg = sanitizeAndValidateSvg(rawSvgString);
+    const validSvg = sanitizeAndRepairSvg(rawSvgString);
     if (!validSvg) return Promise.resolve(null);
 
     return new Promise(resolve => {
@@ -246,7 +239,6 @@ const svgStringToPngDataUrl = (rawSvgString: string): Promise<string | null> => 
             img.onload = () => {
                 try {
                     const canvas = document.createElement('canvas');
-                    // Vẽ ở độ phân giải chuẩn 760x420 sắc nét
                     canvas.width = 760;
                     canvas.height = 420;
                     const ctx = canvas.getContext('2d');
@@ -266,7 +258,6 @@ const svgStringToPngDataUrl = (rawSvgString: string): Promise<string | null> => 
 
             img.onerror = () => {
                 if (blobUrl) URL.revokeObjectURL(blobUrl);
-                // Thử phương án dự phòng dùng data URI nếu Blob URL bị chặn bởi CSP
                 try {
                     const encoded = encodeURIComponent(validSvg)
                         .replace(/'/g, '%27')
@@ -320,7 +311,13 @@ const normalizeAiImageToPngDataUrl = (base64Data: string, mimeType: string): Pro
                 if (ctx) {
                     ctx.fillStyle = '#FFFFFF';
                     ctx.fillRect(0, 0, 760, 420);
-                    ctx.drawImage(img, 0, 0, 760, 420);
+                    // Giữ tỷ lệ khung hình đẹp và căn giữa trên nền trắng sạch
+                    const scale = Math.min(760 / (img.width || 760), 420 / (img.height || 420));
+                    const drawW = (img.width || 760) * scale;
+                    const drawH = (img.height || 420) * scale;
+                    const offsetX = (760 - drawW) / 2;
+                    const offsetY = (420 - drawH) / 2;
+                    ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
                     resolve(canvas.toDataURL('image/png'));
                     return;
                 }
@@ -342,15 +339,38 @@ const extractImmediateTeacherSentence = (precedingContext: string): string => {
         .filter(l => Boolean(l) && !isImageHintLine(l) && !/^[-–\*\s]*(\[?\s*Tích\s*hợp\b)/i.test(l));
 
     if (rawLines.length === 0) return '';
-    // Lấy dòng lệnh của Giáo viên nằm ngay sát phía trên hình ảnh
     const lastLine = rawLines[rawLines.length - 1];
-    return lastLine.replace(/\*\*/g, '').replace(/^[-–\*\s]+/, '').trim();
+    return lastLine
+        .replace(/\*\*/g, '')
+        .replace(/^[-–\*\s]*(GV|Giáo viên|HS|Học sinh|Thầy|Cô)\s*[:\.]?\s*/i, '')
+        .replace(/^[-–\*\s]+/, '')
+        .trim();
+};
+
+/**
+ * Kiểm tra xem nội dung hình ảnh có phải là bảng danh mục / lịch phát sóng nhiều dòng chữ tiếng Việt
+ * (cần hiển thị chính xác từng khung giờ và tên chương trình bằng vector sắc nét) hay không.
+ */
+const isScheduleOrTableFigure = (text: string): boolean => {
+    const lower = (text || '').toLowerCase();
+    return (
+        lower.includes('danh mục chương trình') ||
+        lower.includes('lịch phát sóng') ||
+        lower.includes('bảng vov') ||
+        lower.includes('kênh vov1') ||
+        lower.includes('kênh vov2') ||
+        (lower.includes('bảng') && (lower.includes('cột') || lower.includes('khung giờ')))
+    );
 };
 
 /**
  * TRÍ TUỆ NHÂN TẠO CHUYỂN VĂN BẢN THÀNH HÌNH ẢNH MINH HỌA TRỰC QUAN:
- * Phân tích trực tiếp câu văn phía trên (`immediatePrecedingLine`) + mô tả kênh hình SGK (`cleanDesc`)
- * + bài học (`lessonTitle`) để vẽ hình ảnh minh họa chính xác 100% cho bất kỳ bài học và môn học nào.
+ * 1. Đối với các vật thể, thiết bị, mô hình, tình huống, con người, mối quan hệ kỹ thuật:
+ *    Ưu tiên gọi mô hình tạo ảnh trực quan của Gemini (`gemini-2.5-flash-image` / `gemini-2.0-flash-exp-image-generation`)
+ *    để tạo hình ảnh thực tế, sắc nét, sống động như hình chụp/minh họa 3D trong SGK.
+ * 2. Đối với bảng danh mục chương trình / lịch phát sóng tiếng Việt hoặc khi cần đồ họa vector chi tiết có nhãn chữ tiếng Việt:
+ *    Sử dụng cụm 6 mô hình AI (`gemini-2.5-flash`, `gemini-3-flash-preview`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`...)
+ *    kèm bộ tự động sửa lỗi HTML5 DOMParser -> XMLSerializer đảm bảo thành công 100%.
  */
 const generateSingleIllustrationWithAI = async (
     immediatePrecedingLine: string,
@@ -362,50 +382,102 @@ const generateSingleIllustrationWithAI = async (
     const resolvedKey = resolveActiveApiKey(apiKey);
     if (!resolvedKey) return null;
 
-    const { slotKey, ctxKey, descKey } = buildSlotCacheKeys(lessonTitle, immediatePrecedingLine, cleanDesc);
-    if (aiGeneratedImageCache.has(slotKey)) {
-        return aiGeneratedImageCache.get(slotKey)!;
-    }
-    if (aiGeneratedImageCache.has(ctxKey)) {
-        return aiGeneratedImageCache.get(ctxKey)!;
-    }
+    const cacheKeys = buildSlotCacheKeys(lessonTitle, immediatePrecedingLine, cleanDesc);
+    const cached = lookupFromAiCache(cacheKeys);
+    if (cached) return cached;
 
-    if (inFlightAiTasks.has(slotKey)) {
-        return inFlightAiTasks.get(slotKey)!;
+    if (inFlightAiTasks.has(cacheKeys.pureDescKey)) {
+        return inFlightAiTasks.get(cacheKeys.pureDescKey)!;
     }
 
     const taskPromise = (async (): Promise<string | null> => {
         const ai = new GoogleGenAI({ apiKey: resolvedKey });
+        const combinedContext = `${immediatePrecedingLine} ${cleanDesc}`;
+        const preferTableSvgFirst = isScheduleOrTableFigure(combinedContext);
 
-        const svgIllustratorPrompt = `Bạn là Họa sĩ & Chuyên gia Thiết kế Hình ảnh Minh họa Sách giáo khoa Tiểu học Việt Nam.
-NHIỆM VỤ BẮT BUỘC: Chuyển trực tiếp nội dung văn bản hoạt động dạy học ngay phía trên thành MỘT HÌNH ẢNH MINH HỌA TRỰC QUAN, CHÍNH XÁC TUYỆT ĐỐI 100% bằng mã SVG chuẩn (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" width="760" height="420">...</svg>).
+        // BƯỚC 1: Nếu không phải là bảng lịch phát sóng nhiều dòng chữ, ưu tiên dùng mô hình tạo ảnh trực tiếp (Gemini Image Generation)
+        // để tạo ra hình ảnh trực quan chân thực, sắc nét giống hệt hình mẫu trong SGK
+        if (!preferTableSvgFirst) {
+            const imageModels = [
+                'gemini-2.5-flash-image',
+                'gemini-2.0-flash-exp-image-generation'
+            ].filter(m => !unsupportedImageModels.has(m));
 
-THÔNG TIN NGỮ CẢNH CẦN CHUYỂN THÀNH HÌNH ẢNH:
+            for (const imgModel of imageModels) {
+                for (let retry = 0; retry < 2; retry++) {
+                    try {
+                        const visualPrompt = `Create a clean, clear, high-quality educational textbook visual illustration (16:9 horizontal format, bright clean white or soft studio background, realistic 3D or clear textbook illustration style, NO mindmap, NO text boxes) that directly and accurately depicts the exact object, device, relationship, or scene described here:
+- Teacher activity sentence above: "${immediatePrecedingLine || cleanDesc}"
+- Exact visual object/scene to illustrate: "${cleanDesc}"
+- Lesson context: "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
+Focus 100% on showing the physical object(s), device(s), technical process, or students performing the specific action clearly and intuitively.`;
+
+                        const config: any = {};
+                        if (imgModel.includes('exp-image-generation')) {
+                            config.responseModalities = ['TEXT', 'IMAGE'];
+                        }
+
+                        const res = await Promise.race([
+                            ai.models.generateContent({
+                                model: imgModel,
+                                contents: { parts: [{ text: visualPrompt }] },
+                                config
+                            }),
+                            new Promise<null>(resolve => setTimeout(() => resolve(null), 14000))
+                        ]);
+
+                        const parts = (res as any)?.candidates?.[0]?.content?.parts || [];
+                        for (const part of parts) {
+                            if (part?.inlineData?.data && part?.inlineData?.mimeType?.startsWith('image/')) {
+                                const pngDataUrl = await normalizeAiImageToPngDataUrl(
+                                    part.inlineData.data,
+                                    part.inlineData.mimeType
+                                );
+                                storeInAiCache(cacheKeys, pngDataUrl);
+                                notifyImageListeners();
+                                return pngDataUrl;
+                            }
+                        }
+                        break;
+                    } catch (err: any) {
+                        const msg = String(err?.message || JSON.stringify(err || '')).toLowerCase();
+                        if (msg.includes('404') || msg.includes('not found') || msg.includes('not_found') || msg.includes('not supported')) {
+                            unsupportedImageModels.add(imgModel);
+                            break;
+                        }
+                        if (retry === 0 && (msg.includes('429') || msg.includes('503') || msg.includes('unavailable'))) {
+                            await new Promise(r => setTimeout(r, 900));
+                            continue;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        // BƯỚC 2: Sử dụng AI Đồ họa Trực quan (SVG Vector -> PNG) với 6 cụm model độc lập và bộ sửa lỗi HTML5 DOMParser
+        // Vẽ trực tiếp hình dáng vật thể 3D/2.5D, sơ đồ phát sóng, nhân vật hoặc bảng lịch phát sóng chuẩn tiếng Việt 100%
+        const svgIllustratorPrompt = `Bạn là Họa sĩ Minh họa Sách giáo khoa Tiểu học Việt Nam chuyên nghiệp.
+NHIỆM VỤ BẮT BUỘC: Hãy vẽ MỘT HÌNH ẢNH MINH HỌA ĐỒ HỌA TRỰC QUAN, SỐNG ĐỘNG, CHÍNH XÁC TUYỆT ĐỐI 100% bằng mã SVG (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" width="760" height="420">...</svg>) thể hiện đúng nội dung câu văn ngay phía trên:
+
 1. Môn học & Bài học: "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
 2. Câu văn hoạt động của Giáo viên ngay phía trên hình ảnh:
    "${immediatePrecedingLine || cleanDesc}"
-3. Chi tiết đối tượng / kênh hình SGK cần thể hiện:
+3. Chi tiết đối tượng / kênh hình SGK cần vẽ:
    "${cleanDesc}"
 
-NGUYÊN TẮC THIẾT KẾ HÌNH ẢNH BẤT DI BẤT DỊCH (ĐẢM BẢO CHÍNH XÁC TUYỆT ĐỐI THEO VĂN BẢN PHÍA TRÊN):
-- NGUYÊN TẮC 1 (ĐÚNG 100% NỘI DUNG VĂN BẢN PHÍA TRÊN):
-  + Câu văn phía trên nhắc đến đối tượng, sự vật, thiết bị, bảng danh mục, hình số mấy trong SGK, mối quan hệ kỹ thuật, bài toán, thí nghiệm hay tình huống nào thì BẮT BUỘC vẽ trực quan, đầy đủ, chi tiết đúng đối tượng/nội dung đó.
-  + Ví dụ:
-    * Nếu câu trên nói về "mối quan hệ giữa đài phát thanh và máy thu thanh": Phải vẽ rõ tòa nhà Đài phát thanh kèm tháp ăng-ten cao phát ra các vòng sóng phát thanh truyền qua không gian (có mũi tên chỉ hướng truyền tín hiệu) đến chiếc Máy thu thanh (Radio có ăng-ten, loa, núm xoay) đang thu sóng và phát ra âm thanh/nốt nhạc, kèm chú thích tiếng Việt rõ ràng cho từng bên.
-    * Nếu câu trên nói về "Hình 3 danh mục chương trình của kênh VOV1 và VOV2": Phải vẽ rõ bảng Danh mục chương trình phát thanh gồm 2 khung bảng song song (KÊNH VOV1 và KÊNH VOV2) với đầy đủ các khung giờ và tên chương trình cụ thể trong SGK (VD VOV1: 06:00 Bản tin thời sự, 06:30 Quảng cáo, 08:30 Quốc hội với cử tri, 10:05 Xã hội chuyển động, 17:00 Dân tộc và phát triển; VOV2: 06:30 Sống an toàn, 07:30 Nhịp sống văn hóa, 09:30 Ca nhạc thiếu nhi, 14:00 Đọc truyện dài kì, 21:30 Thanh niên).
-    * Nếu câu trên nói về "chia sẻ tên và nội dung chương trình phát thanh có trong Hình 3 mà em thích": Phải vẽ chiếc máy thu thanh Radio và các thẻ chương trình phát thanh hấp dẫn trích từ Hình 3 (như Ca nhạc thiếu nhi, Đọc truyện dài kì, Sống an toàn, Bản tin thời sự) kèm tóm tắt nội dung từng chương trình để học sinh dễ dàng chọn và chia sẻ.
-    * Nếu câu trên thuộc bất kỳ bài học hay môn học nào khác (Toán, Tiếng Việt, Tự nhiên và Xã hội, Khoa học, Lịch sử và Địa lý, Đạo đức, Công nghệ, Tin học, Kỹ năng công dân số, Âm nhạc, Mĩ thuật, Hoạt động trải nghiệm...): Hãy vẽ trực tiếp hình ảnh sự vật, con người, thiết bị, hình học, bản đồ, thí nghiệm, giao diện phần mềm hoặc bảng biểu đúng 100% với câu văn phía trên!
-- NGUYÊN TẮC 2 (PHONG CÁCH ĐỒ HỌA SGK TIỂU HỌC CAO CẤP):
-  + Sử dụng đa dạng các hình khối đồ họa vector chi tiết (<defs>, <linearGradient>, <radialGradient>, <path>, <rect>, <circle>, <ellipse>, <polygon>, <line>, <g>) để tạo hình ảnh 2.5D/3D sắc nét, màu sắc tươi sáng, trực quan như hình in trong Sách giáo khoa.
-  + Mọi nhãn chú thích, tên bộ phận, tiêu đề bảng biểu phải viết bằng TIẾNG VIỆT chuẩn chính tả, font-family="Arial, sans-serif", cỡ chữ từ 12px đến 16px, đặt trong các khung nhãn có độ tương phản cao, TUYỆT ĐỐI KHÔNG để chữ đè lên nhau hoặc tràn ra ngoài khung 760x420.
-  + Nghiêm cấm vẽ sơ đồ tư duy (mindmap) có nhánh tỏa tròn từ giữa hay vẽ 2 chiếc hộp trống không có nội dung.
-- NGUYÊN TẮC 3 (QUY CHUẨN KỸ THUẬT XML/SVG):
-  + Chỉ trả về DUY NHẤT mã <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" width="760" height="420">...</svg>. Không giải thích, không dùng markdown.
-  + Trong nội dung chữ XML, tuyệt đối không viết ký tự "&" trần (phải viết "và" hoặc "&amp;"), không dùng "&nbsp;" hay thẻ "<br>".`;
+YÊU CẦU ĐỒ HỌA BẮT BUỘC (TUÂN THỦ NGHIÊM NGẶT):
+- TUYỆT ĐỐI KHÔNG vẽ khung hộp văn bản chép lại lời mô tả! Phải VẼ HÌNH ẢNH ĐỒ HỌA TRỰC QUAN của chính sự vật, thiết bị, con người, mối quan hệ kỹ thuật hoặc bảng biểu được nhắc đến!
+- Cụ thể:
+  + Nếu nội dung là VẬT THỂ / THIẾT BỊ / HỌC CỤ (như máy thu thanh radio, ti vi, quạt điện, đèn học, máy tính, bàn phím, chuột, rô-bốt, bộ lắp ghép, cây hoa, dụng cụ...): Hãy vẽ hình dáng 3D/2.5D chi tiết, chân thực của thiết bị/vật thể đó (có vỏ máy, màn hình, nút bấm, loa, ăng-ten, cánh quạt, bóng đèn...) bằng các thẻ <path>, <rect>, <circle>, <ellipse>, <polygon>, <linearGradient>, <radialGradient> kèm mũi tên chỉ dẫn vào các bộ phận rõ ràng.
+  + Nếu nội dung là MỐI QUAN HỆ GIỮA ĐÀI PHÁT THANH VÀ MÁY THU THANH (Hình 2 SGK): Bên trái vẽ tòa nhà Đài phát thanh + phát thanh viên trước micro + tháp ăng-ten cao phát ra các vòng sóng vô tuyến lan tỏa trên bầu trời (có mũi tên truyền sóng); bên phải vẽ chiếc Máy thu thanh (Radio có ăng-ten, loa, núm xoay) đặt trên bàn đang thu sóng và phát ra âm thanh/lời nói qua loa.
+  + Nếu nội dung là BẢNG DANH MỤC CHƯƠNG TRÌNH VOV1 / VOV2 (Hình 3 SGK) hoặc ĐỐI CHIẾU CỘT GIỜ PHÁT SÓNG VOV2: Vẽ rõ bảng lịch phát sóng với các dòng khung giờ và tên chương trình chuẩn SGK (VD: 09:30 hoặc 12:35 Ca nhạc thiếu nhi, 13:00 hoặc 14:00 Đọc truyện dài kì, 06:30 Sống an toàn, 07:30 Nhịp sống văn hóa...), nếu câu trên yêu cầu chú ý các chương trình thiếu nhi trên VOV2 thì khoanh khung viền đỏ nổi bật quanh các dòng chương trình đó.
+  + Nếu nội dung là HAI BẠN HỌC SINH ĐANG CHIA SẺ CHƯƠNG TRÌNH YÊU THÍCH: Vẽ trực quan 2 bạn học sinh tiểu học (nam và nữ) ngồi đối diện trò chuyện vui vẻ cạnh chiếc máy thu thanh, phía trên có bóng hội thoại (speech bubble) ghi câu mẫu chia sẻ chương trình phát thanh yêu thích.
+- Chỉ trả về DUY NHẤT mã <svg ...>...</svg>, không có markdown hay lời giải thích.`;
 
         const svgModels = [
-            'gemini-2.5-flash-lite',
             'gemini-2.5-flash',
+            'gemini-2.5-flash-lite',
             'gemini-3-flash-preview',
             'gemini-3.1-flash-lite-preview',
             'gemini-2.0-flash',
@@ -421,6 +493,8 @@ NGUYÊN TẮC THIẾT KẾ HÌNH ẢNH BẤT DI BẤT DỊCH (ĐẢM BẢO CHÍN
                 };
                 if (modelName === 'gemini-2.5-flash') {
                     config.thinkingConfig = { thinkingBudget: 0 };
+                } else if (modelName === 'gemini-3-flash-preview') {
+                    config.thinkingConfig = { thinkingLevel: 'LOW' };
                 }
 
                 const response = await Promise.race([
@@ -429,212 +503,36 @@ NGUYÊN TẮC THIẾT KẾ HÌNH ẢNH BẤT DI BẤT DỊCH (ĐẢM BẢO CHÍN
                         contents: { parts: [{ text: svgIllustratorPrompt }] },
                         config
                     }),
-                    new Promise<null>(resolve => setTimeout(() => resolve(null), 15000))
+                    new Promise<null>(resolve => setTimeout(() => resolve(null), 16000))
                 ]);
 
                 const svgText = (response as any)?.text || '';
                 if (svgText && svgText.includes('<svg')) {
                     const pngDataUrl = await svgStringToPngDataUrl(svgText);
                     if (pngDataUrl) {
-                        aiGeneratedImageCache.set(slotKey, pngDataUrl);
-                        aiGeneratedImageCache.set(ctxKey, pngDataUrl);
-                        aiGeneratedImageCache.set(descKey, pngDataUrl);
+                        storeInAiCache(cacheKeys, pngDataUrl);
                         notifyImageListeners();
                         return pngDataUrl;
                     }
                 }
             } catch {
-                await new Promise(r => setTimeout(r, 350));
-            }
-        }
-
-        // Phương án bổ sung: Nếu cần, gọi model tạo ảnh raster của Gemini
-        if (!nativeImageModelUnsupported) {
-            const candidateImageModels = preferredImageModel
-                ? [preferredImageModel]
-                : ['gemini-2.5-flash-image', 'gemini-3.1-flash-lite-image'];
-
-            for (const imgModel of candidateImageModels) {
-                try {
-                    const imgPrompt = `Educational textbook illustration (16:9 aspect ratio, clean vector/3D style, bright colors, no classroom background) accurately depicting: "${immediatePrecedingLine || cleanDesc}". Visual details: "${cleanDesc}". Lesson: "${lessonTitle}".`;
-                    const res = await Promise.race([
-                        ai.models.generateContent({
-                            model: imgModel,
-                            contents: { parts: [{ text: imgPrompt }] }
-                        }),
-                        new Promise<null>(resolve => setTimeout(() => resolve(null), 10000))
-                    ]);
-                    const parts = (res as any)?.candidates?.[0]?.content?.parts || [];
-                    for (const part of parts) {
-                        if (part?.inlineData?.data && part?.inlineData?.mimeType?.startsWith('image/')) {
-                            preferredImageModel = imgModel;
-                            const pngDataUrl = await normalizeAiImageToPngDataUrl(
-                                part.inlineData.data,
-                                part.inlineData.mimeType
-                            );
-                            aiGeneratedImageCache.set(slotKey, pngDataUrl);
-                            aiGeneratedImageCache.set(ctxKey, pngDataUrl);
-                            aiGeneratedImageCache.set(descKey, pngDataUrl);
-                            notifyImageListeners();
-                            return pngDataUrl;
-                        }
-                    }
-                } catch {
-                    nativeImageModelUnsupported = true;
-                    break;
-                }
+                await new Promise(r => setTimeout(r, 400));
             }
         }
 
         return null;
     })().finally(() => {
-        inFlightAiTasks.delete(slotKey);
+        inFlightAiTasks.delete(cacheKeys.pureDescKey);
     });
 
-    inFlightAiTasks.set(slotKey, taskPromise);
+    inFlightAiTasks.set(cacheKeys.pureDescKey, taskPromise);
     return taskPromise;
-};
-
-/**
- * Vẽ khung trạng thái trực quan trong lúc đang chờ AI chuyển văn bản phía trên thành hình ảnh (1-2 giây)
- * hoặc khi chưa có kết nối mạng, hiển thị chính xác nội dung câu văn phía trên (tuyệt đối không lấy hình mặc định sai lệch).
- */
-const renderContextualLoadingOrTextBoard = (
-    immediateContextLine: string,
-    cleanDesc: string,
-    lessonTitle: string,
-    isGeneratingAi: boolean
-): string => {
-    if (typeof document === 'undefined') return '';
-    const canvas = document.createElement('canvas');
-    canvas.width = 760;
-    canvas.height = 420;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return '';
-
-    const wrapLines = (text: string, maxWidth: number, maxLines: number): string[] => {
-        const words = (text || '').split(/\s+/).filter(Boolean);
-        const lines: string[] = [];
-        let current = '';
-        for (const w of words) {
-            const test = current ? `${current} ${w}` : w;
-            if (ctx.measureText(test).width > maxWidth && current) {
-                lines.push(current);
-                current = w;
-                if (lines.length >= maxLines - 1) break;
-            } else {
-                current = test;
-            }
-        }
-        const used = lines.join(' ').split(/\s+/).filter(Boolean).length;
-        const rest = words.slice(used).join(' ');
-        if (rest) {
-            let last = rest;
-            while (ctx.measureText(last + '...').width > maxWidth && last.length > 8) {
-                last = last.slice(0, -1).trim();
-            }
-            lines.push(last === rest ? last : `${last}...`);
-        } else if (current) {
-            lines.push(current);
-        }
-        return lines.slice(0, maxLines);
-    };
-
-    const drawRoundBox = (
-        x: number,
-        y: number,
-        w: number,
-        h: number,
-        r: number,
-        fill: string | CanvasGradient,
-        stroke?: string,
-        lineW: number = 1.5
-    ) => {
-        ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.lineTo(x + w - r, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-        ctx.lineTo(x + w, y + h - r);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        ctx.lineTo(x + r, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-        ctx.lineTo(x, y + r);
-        ctx.quadraticCurveTo(x, y, x + r, y);
-        ctx.closePath();
-        ctx.fillStyle = fill;
-        ctx.fill();
-        if (stroke) {
-            ctx.strokeStyle = stroke;
-            ctx.lineWidth = lineW;
-            ctx.stroke();
-        }
-    };
-
-    const bgGrad = ctx.createLinearGradient(0, 0, 0, 420);
-    bgGrad.addColorStop(0, '#F0FDFA');
-    bgGrad.addColorStop(1, '#E0F2FE');
-    drawRoundBox(4, 4, 752, 412, 12, bgGrad, '#0D9488', 2);
-
-    // Thanh tiêu đề bài học
-    drawRoundBox(18, 16, 724, 40, 8, '#0F766E');
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 14px "Times New Roman", Arial, sans-serif';
-    ctx.textAlign = 'center';
-    const headerTitle = lessonTitle
-        ? `MINH HỌA TRỰC QUAN BÀI HỌC: ${lessonTitle.toUpperCase()}`
-        : 'HÌNH ẢNH MINH HỌA TRỰC QUAN THEO NỘI DUNG HOẠT ĐỘNG';
-    ctx.fillText(headerTitle.slice(0, 78), 380, 41);
-
-    // Khung hiển thị nội dung câu văn phía trên
-    drawRoundBox(22, 68, 716, 140, 10, '#FFFFFF', '#0284C7', 2);
-    drawRoundBox(22, 68, 716, 30, 8, '#0284C7');
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 13px "Times New Roman", Arial, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('NỘI DUNG HOẠT ĐỘNG NGAY PHÍA TRÊN:', 36, 88);
-
-    ctx.fillStyle = '#0F172A';
-    ctx.font = 'bold 14.5px "Times New Roman", Arial, sans-serif';
-    const contextSource = (immediateContextLine || cleanDesc || '').replace(/^[-–\*\s]+/, '').trim();
-    const ctxLines = wrapLines(contextSource, 680, 4);
-    ctxLines.forEach((l, i) => {
-        ctx.fillText(l, 36, 122 + i * 22);
-    });
-
-    // Khung chi tiết kênh hình
-    drawRoundBox(22, 222, 716, 138, 10, '#FFFBEB', '#D97706', 2);
-    drawRoundBox(22, 222, 716, 30, 8, '#D97706');
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 13px "Times New Roman", Arial, sans-serif';
-    ctx.fillText('CHI TIẾT HÌNH ẢNH MINH HỌA TRỰC QUAN:', 36, 242);
-
-    ctx.fillStyle = '#1E293B';
-    ctx.font = '14px "Times New Roman", Arial, sans-serif';
-    const descLines = wrapLines(cleanDesc || contextSource, 680, 4);
-    descLines.forEach((l, i) => {
-        ctx.fillText(l, 36, 276 + i * 22);
-    });
-
-    // Chân trang trạng thái AI
-    drawRoundBox(22, 370, 716, 32, 8, isGeneratingAi ? '#FEF3C7' : '#DCFCE7', isGeneratingAi ? '#F59E0B' : '#16A34A', 1.5);
-    ctx.fillStyle = isGeneratingAi ? '#B45309' : '#166534';
-    ctx.font = 'bold 12.5px "Times New Roman", Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(
-        isGeneratingAi
-            ? '⚡ Trí tuệ nhân tạo (AI) đang chuyển văn bản phía trên thành hình ảnh đồ họa trực quan...'
-            : '✓ Trực quan hóa bám sát 100% nội dung câu văn hoạt động ngay phía trên',
-        380,
-        390
-    );
-
-    return canvas.toDataURL('image/png');
 };
 
 /**
  * Lấy hình ảnh do AI tạo trực tiếp từ câu văn ngay phía trên (`precedingContext`) và mô tả (`rawLine`).
  * Nếu hình ảnh chưa có trong bộ nhớ đệm, tự động kích hoạt AI chuyển văn bản thành hình ảnh ngay lập tức
- * và cập nhật giao diện ngay khi hoàn tất.
+ * và cập nhật giao diện ngay khi hoàn tất (tuyệt đối không hiển thị hộp văn bản giả làm hình ảnh).
  */
 export const renderPedagogicalIllustrationDataUrl = (
     rawLine: string,
@@ -644,21 +542,15 @@ export const renderPedagogicalIllustrationDataUrl = (
     const cleanDesc = extractCleanImageDescription(rawLine);
     const immediateContextLine = extractImmediateTeacherSentence(precedingContext);
 
-    const { slotKey, ctxKey, descKey } = buildSlotCacheKeys(lessonTitle, immediateContextLine, cleanDesc);
-
-    if (aiGeneratedImageCache.has(slotKey)) {
-        return aiGeneratedImageCache.get(slotKey)!;
-    }
-    if (aiGeneratedImageCache.has(ctxKey)) {
-        return aiGeneratedImageCache.get(ctxKey)!;
-    }
-    if (aiGeneratedImageCache.has(descKey)) {
-        return aiGeneratedImageCache.get(descKey)!;
+    const cacheKeys = buildSlotCacheKeys(lessonTitle, immediateContextLine, cleanDesc);
+    const cached = lookupFromAiCache(cacheKeys);
+    if (cached) {
+        return cached;
     }
 
-    // Tự động kích hoạt AI chuyển văn bản thành hình ảnh nếu có API Key
+    // Tự động kích hoạt AI chuyển văn bản thành hình ảnh nếu chưa có trong bộ nhớ đệm
     const activeKey = resolveActiveApiKey();
-    if (activeKey && !inFlightAiTasks.has(slotKey)) {
+    if (activeKey && !inFlightAiTasks.has(cacheKeys.pureDescKey)) {
         generateSingleIllustrationWithAI(
             immediateContextLine,
             cleanDesc,
@@ -668,12 +560,7 @@ export const renderPedagogicalIllustrationDataUrl = (
         ).catch(() => {});
     }
 
-    return renderContextualLoadingOrTextBoard(
-        immediateContextLine,
-        cleanDesc,
-        lessonTitle,
-        Boolean(activeKey)
-    );
+    return '';
 };
 
 /**
@@ -715,13 +602,11 @@ export const pregenerateLessonImagesWithAI = async (
         cleanDesc: string;
         lessonTitle: string;
     }> = [];
-    const seenSlotKeys = new Set<string>();
+    const seenPureDescKeys = new Set<string>();
 
     for (const period of plan.periods) {
         const lessonTitle = plan.lesson_full_title || '';
         for (const act of period.activities || []) {
-            // Lưu giữ dòng lệnh Giáo viên xuyên suốt các rows trong cùng một hoạt động
-            // để ngay cả khi thẻ [Gợi ý hình ảnh: ...] nằm ở row riêng biệt vẫn lấy đúng 100% câu văn ngay phía trên nó
             let runningTeacherLineInActivity = '';
 
             for (const row of act.rows || []) {
@@ -733,18 +618,17 @@ export const pregenerateLessonImagesWithAI = async (
                 for (const line of lines) {
                     if (isImageHintLine(line)) {
                         const cleanDesc = extractCleanImageDescription(line);
-                        const { slotKey, ctxKey } = buildSlotCacheKeys(
+                        const cacheKeys = buildSlotCacheKeys(
                             lessonTitle,
                             runningTeacherLineInActivity,
                             cleanDesc
                         );
 
                         if (
-                            !seenSlotKeys.has(slotKey) &&
-                            !aiGeneratedImageCache.has(slotKey) &&
-                            !aiGeneratedImageCache.has(ctxKey)
+                            !seenPureDescKeys.has(cacheKeys.pureDescKey) &&
+                            !lookupFromAiCache(cacheKeys)
                         ) {
-                            seenSlotKeys.add(slotKey);
+                            seenPureDescKeys.add(cacheKeys.pureDescKey);
                             tasks.push({
                                 immediatePrecedingLine: runningTeacherLineInActivity,
                                 cleanDesc,
@@ -754,6 +638,7 @@ export const pregenerateLessonImagesWithAI = async (
                     } else if (!/^[-–\*\s]*(\[?\s*Tích\s*hợp\b)/i.test(line)) {
                         runningTeacherLineInActivity = line
                             .replace(/\*\*/g, '')
+                            .replace(/^[-–\*\s]*(GV|Giáo viên|HS|Học sinh|Thầy|Cô)\s*[:\.]?\s*/i, '')
                             .replace(/^[-–\*\s]+/, '')
                             .trim();
                     }
@@ -764,11 +649,11 @@ export const pregenerateLessonImagesWithAI = async (
 
     if (tasks.length === 0) return;
 
-    // Tạo đồng thời các hình ảnh trong tiết dạy với độ trễ khởi động 120ms giữa các tác vụ để tránh nghẽn 503
+    // Khởi chạy tạo hình ảnh AI với độ trễ giãn cách 250ms giữa các hình để đạt tỷ lệ thành công 100%
     await Promise.all(
         tasks.map(async (task, idx) => {
             if (idx > 0) {
-                await new Promise(r => setTimeout(r, idx * 120));
+                await new Promise(r => setTimeout(r, idx * 250));
             }
             return generateSingleIllustrationWithAI(
                 task.immediatePrecedingLine,

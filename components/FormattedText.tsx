@@ -69,7 +69,7 @@ const FormattedText: React.FC<Props> = ({
                     const cleanDesc = extractCleanImageDescription(trimmedLine);
                     return (
                         <div key={index} style={{ margin: '6pt 0', textAlign: 'center' }}>
-                            {imgDataUrl && (
+                            {imgDataUrl ? (
                                 <img
                                     src={imgDataUrl}
                                     alt={cleanDesc}
@@ -82,6 +82,27 @@ const FormattedText: React.FC<Props> = ({
                                         display: 'inline-block'
                                     }}
                                 />
+                            ) : (
+                                <div
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        width: '320px',
+                                        maxWidth: '100%',
+                                        minHeight: '110px',
+                                        padding: '12px',
+                                        borderRadius: '6px',
+                                        border: '1px dashed #94a3b8',
+                                        backgroundColor: '#f8fafc',
+                                        color: '#0f766e',
+                                        fontSize: '11pt',
+                                        fontStyle: 'italic'
+                                    }}
+                                >
+                                    <span>Đang vẽ hình ảnh minh họa trực quan...</span>
+                                </div>
                             )}
                         </div>
                     );
