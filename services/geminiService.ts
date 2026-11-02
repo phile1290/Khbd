@@ -1,3 +1,4 @@
+import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_PROMPT } from "../constants";
 import { ImageFile, InputState, LessonPlanResponse, PpctLesson, SourceType } from "../types";
 import {
@@ -22,8 +23,64 @@ const ThinkingLevel = {
     LOW: "LOW"
 } as const;
 
+export const GEMINI_API_KEY_STORAGE_KEYS = [
+    "gemini_api_key_thma",
+    "user_gemini_api_key",
+    "gemini_api_key"
+] as const;
+
+export const isRealUserApiKey = (val?: string | null): boolean => {
+    if (!val) return false;
+    const trimmed = val.trim();
+    return trimmed.length >= 20 && trimmed !== "server-managed";
+};
+
+export const getStoredGeminiApiKey = (explicitKey?: string): string => {
+    if (isRealUserApiKey(explicitKey)) {
+        return explicitKey!.trim();
+    }
+    if (typeof window !== "undefined" && window.localStorage) {
+        for (const k of GEMINI_API_KEY_STORAGE_KEYS) {
+            try {
+                const saved = window.localStorage.getItem(k);
+                if (isRealUserApiKey(saved)) {
+                    return saved!.trim();
+                }
+            } catch {}
+        }
+    }
+    return "";
+};
+
+export const saveGeminiApiKeyToStorage = (rawKey: string): string => {
+    const clean = (rawKey || "").trim();
+    if (typeof window !== "undefined" && window.localStorage) {
+        for (const k of GEMINI_API_KEY_STORAGE_KEYS) {
+            try {
+                if (clean) {
+                    window.localStorage.setItem(k, clean);
+                } else {
+                    window.localStorage.removeItem(k);
+                }
+            } catch {}
+        }
+    }
+    return clean;
+};
+
+export const clearGeminiApiKeyFromStorage = (): void => {
+    if (typeof window !== "undefined" && window.localStorage) {
+        for (const k of GEMINI_API_KEY_STORAGE_KEYS) {
+            try {
+                window.localStorage.removeItem(k);
+            } catch {}
+        }
+    }
+};
+
 // Bộ nhớ đệm Base64 để khi "Soạn tất cả các tuần" trên điện thoại / máy tính / Vercel không phải đọc lại tệp PDF nhiều lần
 const inMemoryBase64Cache = new Map<string, string>();
+const clientUploadedFileCache = new Map<string, { uri: string; mimeType: string; name: string }>();
 
 const getCachedFileBase64 = async (file: File): Promise<string> => {
     const cacheKey = `${file.name}_${file.size}_${file.lastModified}`;
@@ -39,16 +96,47 @@ export const callServerGenerateContent = async (payload: {
     model: string;
     contents: any;
     config?: any;
+    apiKey?: string;
 }): Promise<{ text: string; candidates: any[] }> => {
+    const userApiKey = getStoredGeminiApiKey(payload.apiKey);
+
+    // 1. Nếu người dùng đã nhập và lưu Gemini API Key trên trình duyệt:
+    // Gọi trực tiếp qua GoogleGenAI SDK với key của người dùng (hoạt động 100% trên cả Vercel tĩnh lẫn AI Studio)
+    if (userApiKey) {
+        const ai = new GoogleGenAI({ apiKey: userApiKey });
+        const response = await ai.models.generateContent({
+            model: payload.model,
+            contents: payload.contents,
+            config: payload.config
+        });
+        return {
+            text: response.text || "",
+            candidates: response.candidates || []
+        };
+    }
+
+    // 2. Dự phòng gọi qua máy chủ (dành cho môi trường preview có cấu hình biến môi trường trên server)
     const res = await fetch("/api/gemini/generate-content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
     });
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+        throw new Error(
+            "Vui lòng nhập mã Gemini API Key vào ô 'Kết nối Gemini API Key' ở phía trên và bấm 'Lưu Key' để sử dụng."
+        );
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
         const errMsg = data?.error?.message || data?.error || `HTTP ${res.status}`;
-        throw new Error(typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg));
+        const errStr = typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg);
+        if (res.status === 404 || errStr.toLowerCase().includes("api key")) {
+            throw new Error(
+                "Vui lòng nhập mã Gemini API Key vào ô 'Kết nối Gemini API Key' ở phía trên và bấm 'Lưu Key' để sử dụng."
+            );
+        }
+        throw new Error(errStr);
     }
     return {
         text: data?.text || "",
@@ -60,7 +148,35 @@ export const callServerUploadFile = async (params: {
     file: File;
     mimeType: string;
     cacheKey?: string;
+    apiKey?: string;
 }): Promise<{ uri: string; mimeType: string; name: string }> => {
+    const userApiKey = getStoredGeminiApiKey(params.apiKey);
+    const effectiveCacheKey = params.cacheKey ? `${userApiKey.slice(-6)}_${params.cacheKey}` : "";
+
+    if (effectiveCacheKey && clientUploadedFileCache.has(effectiveCacheKey)) {
+        return clientUploadedFileCache.get(effectiveCacheKey)!;
+    }
+
+    if (userApiKey) {
+        const ai = new GoogleGenAI({ apiKey: userApiKey });
+        const uploaded = await ai.files.upload({
+            file: params.file,
+            config: {
+                mimeType: params.mimeType || "application/pdf",
+                displayName: params.file.name || "uploaded_file"
+            }
+        });
+        const result = {
+            uri: uploaded.uri || "",
+            mimeType: uploaded.mimeType || params.mimeType,
+            name: uploaded.name || ""
+        };
+        if (effectiveCacheKey && result.uri) {
+            clientUploadedFileCache.set(effectiveCacheKey, result);
+        }
+        return result;
+    }
+
     const base64Data = await getCachedFileBase64(params.file);
     const res = await fetch("/api/gemini/upload-file", {
         method: "POST",
@@ -84,8 +200,16 @@ export const callServerUploadFile = async (params: {
     };
 };
 
-export const callServerDeleteFiles = async (names: string[]): Promise<void> => {
+export const callServerDeleteFiles = async (names: string[], apiKey?: string): Promise<void> => {
     if (!names || names.length === 0) return;
+    const userApiKey = getStoredGeminiApiKey(apiKey);
+    if (userApiKey) {
+        const ai = new GoogleGenAI({ apiKey: userApiKey });
+        await Promise.all(
+            names.map(name => (name ? ai.files.delete({ name }).catch(() => {}) : Promise.resolve()))
+        );
+        return;
+    }
     await fetch("/api/gemini/delete-files", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -94,7 +218,7 @@ export const callServerDeleteFiles = async (names: string[]): Promise<void> => {
 };
 
 export const resolveGeminiApiKey = (apiKey?: string): string => {
-    return (apiKey || "").trim();
+    return getStoredGeminiApiKey(apiKey) || "server-managed";
 };
 
 const LESSON_PLAN_RESPONSE_SCHEMA = {

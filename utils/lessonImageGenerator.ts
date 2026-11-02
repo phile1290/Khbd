@@ -7,6 +7,7 @@
  * - TUYỆT ĐỐI KHÔNG sử dụng kho hình vẽ sẵn cố định và KHÔNG hiển thị hộp văn bản thay cho hình ảnh.
  */
 
+import { GoogleGenAI } from "@google/genai";
 import { LessonPlanResponse } from "../types";
 
 // Bộ nhớ đệm lưu trữ hình ảnh PNG (Data URL) do AI sinh ra trong phiên làm việc
@@ -16,11 +17,45 @@ const inFlightAiTasks = new Map<string, Promise<string | null>>();
 
 const unsupportedImageModels = new Set<string>();
 
+const STORAGE_KEYS = ["gemini_api_key_thma", "user_gemini_api_key", "gemini_api_key"] as const;
+
+const getActiveUserKey = (explicitKey?: string): string => {
+    if (explicitKey && explicitKey.trim().length >= 20 && explicitKey.trim() !== "server-managed") {
+        return explicitKey.trim();
+    }
+    if (typeof window !== "undefined" && window.localStorage) {
+        for (const k of STORAGE_KEYS) {
+            try {
+                const v = window.localStorage.getItem(k);
+                if (v && v.trim().length >= 20 && v.trim() !== "server-managed") {
+                    return v.trim();
+                }
+            } catch {}
+        }
+    }
+    return "";
+};
+
 const callServerGenerate = async (payload: {
     model: string;
     contents: any;
     config?: any;
+    apiKey?: string;
 }): Promise<{ text: string; candidates: any[] }> => {
+    const userKey = getActiveUserKey(payload.apiKey);
+    if (userKey) {
+        const ai = new GoogleGenAI({ apiKey: userKey });
+        const response = await ai.models.generateContent({
+            model: payload.model,
+            contents: payload.contents,
+            config: payload.config
+        });
+        return {
+            text: response.text || "",
+            candidates: response.candidates || []
+        };
+    }
+
     const res = await fetch("/api/gemini/generate-content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

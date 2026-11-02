@@ -8,7 +8,13 @@ import {
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { InputState, SourceType, ImageFile, LessonPlanResponse, PpctLesson, WeekPlanItem } from './types';
-import { generateLessonPlan, extractLessonsFromPpct } from './services/geminiService';
+import {
+    generateLessonPlan,
+    extractLessonsFromPpct,
+    getStoredGeminiApiKey,
+    saveGeminiApiKeyToStorage,
+    clearGeminiApiKeyFromStorage
+} from './services/geminiService';
 import { downloadPpctWordTemplate, downloadSingleLessonWord, generateLessonPlanDocxBlob, enrichWeekPlansWithPedagogy } from './utils';
 import { pregenerateLessonImagesWithAI } from './utils/lessonImageGenerator';
 import LessonPreview from './components/LessonPreview';
@@ -18,8 +24,45 @@ const App: React.FC = () => {
     // Top-Level Main Tab: 'khbd' (Kế hoạch bài dạy) | 'khdh' (Kế hoạch dạy học)
     const [mainFeatureTab, setMainFeatureTab] = useState<'khbd' | 'khdh'>('khbd');
 
-    const [userApiKey] = useState<string>('server-managed');
-    const getEffectiveApiKey = (): string => 'server-managed';
+    // Quản lý Gemini API Key lưu trực tiếp vào trình duyệt (localStorage) để những lần sau không phải nhập lại
+    const [userApiKey, setUserApiKey] = useState<string>(() => getStoredGeminiApiKey());
+    const [apiKeyDraft, setApiKeyDraft] = useState<string>(() => getStoredGeminiApiKey());
+    const [isEditingApiKey, setIsEditingApiKey] = useState<boolean>(() => !getStoredGeminiApiKey());
+    const [showApiKeyPlain, setShowApiKeyPlain] = useState<boolean>(false);
+    const [apiKeySavedNotice, setApiKeySavedNotice] = useState<string>('');
+
+    const getEffectiveApiKey = (): string => {
+        const stored = getStoredGeminiApiKey(userApiKey);
+        return stored || 'server-managed';
+    };
+
+    const handleSaveUserApiKey = async () => {
+        const trimmed = (apiKeyDraft || '').trim();
+        if (!trimmed) {
+            setError('Vui lòng nhập mã Gemini API Key hợp lệ trước khi bấm Lưu.');
+            return;
+        }
+        const saved = saveGeminiApiKeyToStorage(trimmed);
+        setUserApiKey(saved);
+        setApiKeyDraft(saved);
+        setIsEditingApiKey(false);
+        setError('');
+        setPpctError('');
+        setApiKeySavedNotice('Đã lưu API Key trên trình duyệt! Lần sau không cần nhập lại.');
+        setTimeout(() => setApiKeySavedNotice(''), 4500);
+
+        if (ppctPdfFile && weekPlansRef.current.length === 0) {
+            await parsePpct(ppctPdfFile, saved);
+        }
+    };
+
+    const handleClearUserApiKey = () => {
+        clearGeminiApiKeyFromStorage();
+        setUserApiKey('');
+        setApiKeyDraft('');
+        setIsEditingApiKey(true);
+        setApiKeySavedNotice('');
+    };
 
     // Active View Tab inside KHBD: 'list' (Danh sách các tuần tải về) | 'preview' (Xem chi tiết giáo án)
     const [activeTab, setActiveTab] = useState<'list' | 'preview'>('list');
@@ -149,7 +192,7 @@ const App: React.FC = () => {
     };
 
     const parsePpct = async (file: File, _key?: string) => {
-        const effectiveKey = getEffectiveApiKey();
+        const effectiveKey = _key || getEffectiveApiKey();
         setParsingPpct(true);
         setPpctError('');
         setError('');
@@ -559,9 +602,9 @@ const App: React.FC = () => {
             
             <div className="relative z-10 max-w-7xl mx-auto space-y-5">
                 {/* Header */}
-                <header className="flex flex-col md:flex-row items-center justify-between bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-md border border-teal-100">
-                    <div className="flex items-center gap-3 mb-3 md:mb-0">
-                        <div className="bg-teal-600 p-2.5 rounded-lg text-white shadow-sm">
+                <header className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-md border border-teal-100">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-teal-600 p-2.5 rounded-lg text-white shadow-sm shrink-0">
                             <BookOpen size={24} />
                         </div>
                         <div>
@@ -574,7 +617,95 @@ const App: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 justify-end">
+                        {/* Ô NHẬP VÀ LƯU GEMINI API KEY TRỰC TIẾP TRÊN TRÌNH DUYỆT */}
+                        {!isEditingApiKey && userApiKey ? (
+                            <div className="flex items-center gap-2 bg-teal-50/90 border border-teal-200 px-3 py-1.5 rounded-lg">
+                                <CheckCircle size={15} className="text-teal-600 shrink-0" />
+                                <div className="text-xs">
+                                    <span className="font-bold text-teal-900">Đã lưu API Key: </span>
+                                    <span className="font-mono text-teal-700">
+                                        {userApiKey.slice(0, 6)}...{userApiKey.slice(-4)}
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setApiKeyDraft(userApiKey);
+                                        setIsEditingApiKey(true);
+                                    }}
+                                    className="px-2 py-1 bg-white hover:bg-teal-100 text-teal-800 border border-teal-300 rounded text-[11px] font-bold transition-colors cursor-pointer"
+                                    title="Thay đổi mã Gemini API Key khác"
+                                >
+                                    Đổi Key
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleClearUserApiKey}
+                                    className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                                    title="Xóa API Key đã lưu"
+                                >
+                                    <Trash2 size={13} />
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 border border-teal-300 p-1.5 rounded-lg shadow-2xs">
+                                <div className="flex items-center gap-1.5 pl-1.5 text-teal-800 text-xs font-bold">
+                                    <Key size={14} className="text-teal-600 shrink-0" />
+                                    <span className=" whitespace-nowrap">Gemini API Key:</span>
+                                </div>
+                                <div className="relative flex items-center">
+                                    <input
+                                        type={showApiKeyPlain ? 'text' : 'password'}
+                                        placeholder="Nhập mã Gemini API Key (AIza...)"
+                                        value={apiKeyDraft}
+                                        onChange={(e) => setApiKeyDraft(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleSaveUserApiKey();
+                                            }
+                                        }}
+                                        className="w-48 sm:w-60 px-2.5 py-1.5 pr-7 text-xs bg-white border border-gray-300 rounded-md outline-none focus:border-teal-600 font-mono"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowApiKeyPlain(prev => !prev)}
+                                        className="absolute right-1.5 text-gray-400 hover:text-gray-700 cursor-pointer"
+                                        title={showApiKeyPlain ? 'Ẩn API Key' : 'Hiện API Key'}
+                                    >
+                                        <Eye size={13} />
+                                    </button>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleSaveUserApiKey}
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-md shadow-2xs transition-colors cursor-pointer"
+                                    title="Lưu API Key vào trình duyệt để những lần sau không phải nhập lại"
+                                >
+                                    <Check size={13} /> Lưu
+                                </button>
+                                {userApiKey && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsEditingApiKey(false)}
+                                        className="px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-200 rounded-md cursor-pointer"
+                                    >
+                                        Hủy
+                                    </button>
+                                )}
+                                <a
+                                    href="https://aistudio.google.com/app/apikey"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] text-teal-700 hover:text-teal-900 underline font-semibold px-1.5 whitespace-nowrap"
+                                    title="Lấy mã Gemini API Key miễn phí từ Google AI Studio"
+                                >
+                                    Lấy Key
+                                </a>
+                            </div>
+                        )}
+
                         <button
                             type="button"
                             onClick={downloadPpctWordTemplate}
@@ -585,6 +716,13 @@ const App: React.FC = () => {
                         </button>
                     </div>
                 </header>
+
+                {apiKeySavedNotice && (
+                    <div className="p-2.5 bg-teal-50 border border-teal-300 rounded-xl text-xs text-teal-900 font-bold flex items-center gap-2 shadow-2xs">
+                        <CheckCircle size={15} className="text-teal-600 shrink-0" />
+                        <span>{apiKeySavedNotice}</span>
+                    </div>
+                )}
 
                 {/* THANH ĐIỀU HƯỚNG 2 CHỨC NĂNG CHÍNH: KẾ HOẠCH BÀI DẠY vs. KẾ HOẠCH DẠY HỌC */}
                 <div className="flex bg-white/95 backdrop-blur-md p-1.5 rounded-xl shadow-md border border-teal-100 gap-2">
