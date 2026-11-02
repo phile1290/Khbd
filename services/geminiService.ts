@@ -1,4 +1,3 @@
-import { GoogleGenAI, Part, ThinkingLevel, Type } from "@google/genai";
 import { SYSTEM_PROMPT } from "../constants";
 import { ImageFile, InputState, LessonPlanResponse, PpctLesson, SourceType } from "../types";
 import {
@@ -11,6 +10,17 @@ import {
 } from "../utils";
 import { pregenerateLessonImagesWithAI } from "../utils/lessonImageGenerator";
 import * as mammoth from "mammoth";
+
+const Type = {
+    OBJECT: "OBJECT",
+    ARRAY: "ARRAY",
+    STRING: "STRING",
+    INTEGER: "INTEGER"
+} as const;
+
+const ThinkingLevel = {
+    LOW: "LOW"
+} as const;
 
 // Bộ nhớ đệm Base64 để khi "Soạn tất cả các tuần" trên điện thoại / máy tính / Vercel không phải đọc lại tệp PDF nhiều lần
 const inMemoryBase64Cache = new Map<string, string>();
@@ -25,21 +35,66 @@ const getCachedFileBase64 = async (file: File): Promise<string> => {
     return data;
 };
 
+export const callServerGenerateContent = async (payload: {
+    model: string;
+    contents: any;
+    config?: any;
+}): Promise<{ text: string; candidates: any[] }> => {
+    const res = await fetch("/api/gemini/generate-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const errMsg = data?.error?.message || data?.error || `HTTP ${res.status}`;
+        throw new Error(typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg));
+    }
+    return {
+        text: data?.text || "",
+        candidates: data?.candidates || []
+    };
+};
+
+export const callServerUploadFile = async (params: {
+    file: File;
+    mimeType: string;
+    cacheKey?: string;
+}): Promise<{ uri: string; mimeType: string; name: string }> => {
+    const base64Data = await getCachedFileBase64(params.file);
+    const res = await fetch("/api/gemini/upload-file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            base64Data,
+            mimeType: params.mimeType,
+            displayName: params.file.name,
+            cacheKey: params.cacheKey
+        })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.uri) {
+        const errMsg = data?.error?.message || data?.error || `HTTP ${res.status}`;
+        throw new Error(typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg));
+    }
+    return {
+        uri: data.uri,
+        mimeType: data.mimeType || params.mimeType,
+        name: data.name || ""
+    };
+};
+
+export const callServerDeleteFiles = async (names: string[]): Promise<void> => {
+    if (!names || names.length === 0) return;
+    await fetch("/api/gemini/delete-files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ names })
+    }).catch(() => {});
+};
+
 export const resolveGeminiApiKey = (apiKey?: string): string => {
-    let key = (apiKey || "").trim();
-    if (!key) {
-        try {
-            key = ((import.meta as any).env?.VITE_GEMINI_API_KEY || "").trim();
-        } catch (e) {}
-    }
-    if (!key) {
-        try {
-            if (typeof process !== "undefined" && process.env) {
-                key = (process.env.GEMINI_API_KEY || process.env.API_KEY || "").trim();
-            }
-        } catch (e) {}
-    }
-    return key;
+    return (apiKey || "").trim();
 };
 
 const LESSON_PLAN_RESPONSE_SCHEMA = {
@@ -214,11 +269,21 @@ export const generateLessonPlan = async ({
         - TÊN ĐẦY ĐỦ CỦA TIẾT HỌC TRONG TUẦN NÀY: "${exactLessonTitleWithPeriod}"
         - SỐ TIẾT DẠY TRONG TUẦN NÀY: ĐÚNG 1 TIẾT DUY NHẤT (Tiết ${currentPeriodInLesson}/${totalLessonPeriods} của bài "${baseLessonName}"). THỜI LƯỢNG: ${totalDuration} phút.
         
-        **NGUYÊN TẮC SỐ 1 — BÁM SÁT SÁCH GIÁO KHOA (SGK) CHÍNH XÁC TUYỆT ĐỐI 100% (CẤM BỊA ĐẶT NỘI DUNG NGOÀI SGK):**
+        **NGUYÊN TẮC SỐ 1 — SOẠN CHI TIẾT NHẤT, PHÂN TÍCH RÕ RÀNG NHẤT, KHOA HỌC NHẤT & BÁM SÁT SGK 100% (TUYỆT ĐỐI KHÔNG ĐƯỢC SOẠN SƠ SÀI):**
         - Bắt buộc đối chiếu từng chữ, từng mục, từng hình minh họa và bài tập của bài "${baseLessonName}" trong Sách giáo khoa đính kèm.
         - Chỉ dạy đúng các khái niệm, các bước, các cách thực hiện, tình huống và bài tập CÓ TRONG SÁCH GIÁO KHOA của bài "${baseLessonName}".
         - NGHIÊM CẤM TUYỆT ĐỐI việc tự ý bịa đặt thêm các cách làm, công cụ, tiêu chí đánh giá hay nội dung nằm ngoài Sách giáo khoa!
-        - Để đạt đủ số lượng gạch đầu dòng quy định cho mỗi hoạt động, hãy chia nhỏ và mô tả thật chi tiết các bước tổ chức sư phạm của Giáo viên và Học sinh (giao nhiệm vụ quan sát hình/đọc mục nào trong SGK -> thảo luận nhóm trả lời câu hỏi nào của SGK -> đại diện trình bày -> nhận xét chéo -> kết luận theo hộp ghi nhớ SGK) trên chính nội dung thật của SGK.
+        - **NGHIÊM CẤM TUYỆT ĐỐI VIỆC SOẠN SƠ SÀI, QUA LOA, CHUNG CHUNG:**
+          + KHÔNG ĐƯỢC viết các câu ngắn cụt lủn như: "- Giáo viên đặt câu hỏi gợi mở", "- Học sinh suy nghĩ trả lời", "- Giáo viên mời đại diện báo cáo", "- Học sinh báo cáo kết quả", "- Giáo viên nhận xét, chốt kiến thức", "- Học sinh lắng nghe".
+          + **MỖI GẠCH ĐẦU DÒNG PHẢI LÀ MỘT BƯỚC SƯ PHẠM ĐẦY ĐỦ, CHI TIẾT, PHÂN TÍCH RÕ RÀNG VÀ KHOA HỌC (tối thiểu 25 - 50 từ/gạch đầu dòng)**:
+            * **Ở cột Hoạt động của Giáo viên (teacher):**
+              (1) Khi chuyển giao nhiệm vụ: Nêu rõ hình thức tổ chức (cá nhân, nhóm đôi, nhóm 4, trò chơi...), yêu cầu học sinh mở SGK trang mấy / mục nào / quan sát Hình số mấy, và **TRÍCH DẪN TRỰC TIẾP CÂU HỎI GỢI MỞ / CÂU HỎI THẢO LUẬN CỤ THỂ** trong dấu nháy đơn ('...').
+              (2) Khi hướng dẫn & hỗ trợ: Mô tả rõ Giáo viên đi đến các nhóm quan sát thao tác của học sinh, gợi ý học sinh phân tích đặc điểm/dữ kiện nào trong kênh hình hoặc văn bản SGK, đặt câu hỏi gợi mở phụ nào để tháo gỡ vướng mắc.
+              (3) Khi tổ chức báo cáo & thảo luận: Mô tả rõ cách Giáo viên mời đại diện nhóm trình bày, đặt câu hỏi đào sâu bản chất khoa học ('Vì sao...?', 'Nếu... thì điều gì sẽ xảy ra?') và hướng dẫn các nhóm nhận xét chéo theo tiêu chí cụ thể.
+              (4) Khi phân tích & kết luận kiến thức: **BẮT BUỘC PHÂN TÍCH LÀM RÕ BẢN CHẤT KHOA HỌC CỦA KIẾN THỨC** và **GHI RÕ NỘI DUNG KẾT LUẬN / HỘP GHI NHỚ TRỌNG TÂM CỦA BÀI HỌC**, tuyệt đối không chỉ viết "Giáo viên chốt kiến thức".
+            * **Ở cột Hoạt động của Học sinh (student) — Đối xứng 1:1 tuyệt đối với từng gạch đầu dòng của Giáo viên:**
+              (1) Mô tả rõ thao tác học tập cụ thể (quan sát chi tiết nào trên kênh hình, đọc thầm đoạn thông tin nào, thảo luận nhóm đôi/nhóm 4 ra sao).
+              (2) **BẮT BUỘC GHI RÕ NỘI DUNG CÂU TRẢ LỜI DỰ KIẾN CHÍNH XÁC, ĐẦY ĐỦ VÀ KHOA HỌC CỦA HỌC SINH** (trình bày trọn vẹn lời giải, các ý trả lời đúng 100% theo SGK cho từng câu hỏi mà Giáo viên vừa nêu ở cột bên trái), tuyệt đối không viết chung chung "Học sinh trả lời câu hỏi".
 
         **QUY TẮC BẮT BUỘC TUYỆT ĐỐI VỀ ĐỦ 4 HOẠT ĐỘNG DẠY HỌC TRONG TIẾT HỌC (KHÔNG ĐƯỢC BỎ SÓT BẤT KỲ HOẠT ĐỘNG NÀO):**
         Trong phần tử duy nhất của mảng "periods", mảng "activities" BẮT BUỘC PHẢI CÓ ĐẦY ĐỦ 4 HOẠT ĐỘNG DẠY HỌC theo đúng thứ tự sau:
@@ -236,33 +301,33 @@ export const generateLessonPlan = async ({
         - BẮT BUỘC CHIA NỘI DUNG BÀI HỌC "${baseLessonName}" TRONG SGK THÀNH ${totalLessonPeriods} PHẦN TƯƠNG ỨNG VỚI ${totalLessonPeriods} TIẾT DẠY VÀ PHÂN BỔ CHÍNH XÁC (ĐỦ 4 HOẠT ĐỘNG):
           ${currentPeriodInLesson === 1 ? `
           + BẠN ĐANG SOẠN RIÊNG TIẾT 1 / ${totalLessonPeriods} (${totalDuration} phút - ĐỦ 4 HOẠT ĐỘNG):
-            * Mục I. Yêu cầu cần đạt: Ghi mục tiêu kiến thức, kỹ năng của PHẦN ĐẦU bài học trong SGK ở phía trên; nếu có tích hợp thì dòng yêu cầu cần đạt tích hợp đặt ở CUỐI CÙNG.
-            * Mục II. Đồ dùng dạy học: Thiết bị, học liệu cần cho Tiết 1.
-            * 1. Hoạt động mở đầu: Tạo tâm thế hào hứng, dẫn nhập vào bài học bám sát tình huống mở đầu trong SGK.
-            * 2. Hoạt động hình thành kiến thức mới: Khám phá sâu sắc kiến thức trọng tâm của PHẦN 1 / MỤC ĐẦU TIÊN trong SGK (đúng 100% các ý, tình huống, hình ảnh có trong SGK).
-            * 3. Hoạt động luyện tập, thực hành: Thực hành câu hỏi/bài tập hoặc bước chuẩn bị thuộc phạm vi Phần 1 trong SGK.
-            * 4. Hoạt động vận dụng, trải nghiệm: Vận dụng kiến thức vừa học ở Tiết 1 vào thực tế, củng cố và dặn dò chuẩn bị cho Tiết 2.
+            * Mục I. Yêu cầu cần đạt: Phân tích chi tiết mục tiêu kiến thức, kỹ năng, năng lực và phẩm chất của PHẦN ĐẦU bài học trong SGK ở phía trên; nếu có tích hợp thì dòng yêu cầu cần đạt tích hợp đặt ở CUỐI CÙNG.
+            * Mục II. Đồ dùng dạy học: Liệt kê chi tiết thiết bị, học liệu, mô hình, kênh hình cần cho Tiết 1.
+            * 1. Hoạt động mở đầu: Tổ chức tình huống mở đầu sinh động bám sát SGK, đặt câu hỏi khai thác trải nghiệm và phân tích dẫn nhập vào bài học.
+            * 2. Hoạt động hình thành kiến thức mới: Khám phá, phân tích sâu sắc từng mục, từng kênh hình và câu hỏi của PHẦN 1 / MỤC ĐẦU TIÊN trong SGK, chốt rõ nội dung kiến thức khoa học.
+            * 3. Hoạt động luyện tập, thực hành: Tổ chức hướng dẫn, phân tích và giải quyết chi tiết từng câu hỏi/bài tập thuộc phạm vi Phần 1 trong SGK kèm đáp án dự kiến đầy đủ.
+            * 4. Hoạt động vận dụng, trải nghiệm: Vận dụng kiến thức vừa học ở Tiết 1 vào tình huống thực tế cụ thể, củng cố và dặn dò chuẩn bị cho Tiết 2.
           ` : currentPeriodInLesson === totalLessonPeriods ? `
           + BẠN ĐANG SOẠN RIÊNG TIẾT CUỐI (${currentPeriodInLesson} / ${totalLessonPeriods}) CỦA BÀI HỌC (${totalDuration} phút - ĐỦ 4 HOẠT ĐỘNG):
             * ĐÂY LÀ TIẾT CUỐI CÙNG (TIẾT ${currentPeriodInLesson}/${totalLessonPeriods}) CỦA BÀI HỌC "${baseLessonName}". Học sinh đã học các tiết trước (Tiết 1 đến Tiết ${currentPeriodInLesson - 1}).
-            * Mục I. Yêu cầu cần đạt: Ghi mục tiêu của phần cuối bài học trong SGK ở phía trên (nếu là bài học thực hành/dự án làm sản phẩm như Làm đồ chơi, Làm biển báo... thì tập trung vào: hoàn thiện, trang trí sản phẩm, trưng bày, giới thiệu, đánh giá sản phẩm theo các tiêu chí trong SGK và tính toán chi phí/vận dụng thực tế); nếu có tích hợp thì dòng yêu cầu cần đạt tích hợp đặt ở CUỐI CÙNG.
+            * Mục I. Yêu cầu cần đạt: Phân tích chi tiết mục tiêu của phần cuối bài học trong SGK ở phía trên (nếu là bài học thực hành/dự án làm sản phẩm như Làm đồ chơi, Làm biển báo... thì tập trung vào: hoàn thiện, trang trí sản phẩm, trưng bày, giới thiệu, đánh giá sản phẩm theo các tiêu chí trong SGK và tính toán chi phí/vận dụng thực tế); nếu có tích hợp thì dòng yêu cầu cần đạt tích hợp đặt ở CUỐI CÙNG.
             * Mục II. Đồ dùng dạy học: Sản phẩm học sinh đã thực hiện, phiếu đánh giá sản phẩm, học liệu phục vụ trưng bày/hoàn thiện ở Tiết ${currentPeriodInLesson}.
-            * 1. Hoạt động mở đầu: BẮT BUỘC KHỞI ĐỘNG KẾT NỐI: Tổ chức trò chơi/câu hỏi để Học sinh nhắc lại nhanh nội dung/các bước đã thực hiện ở Tiết ${currentPeriodInLesson - 1}, dẫn dắt vào nhiệm vụ của Tiết ${currentPeriodInLesson}.
-            * 2. Hoạt động hình thành kiến thức mới: Tìm hiểu nội dung phần cuối của bài học trong SGK (hoặc tìm hiểu tiêu chí đánh giá sản phẩm, cách trưng bày, giới thiệu sản phẩm, bảng tính chi phí/nội dung mục cuối trong SGK).
-            * 3. Hoạt động luyện tập, thực hành: Tổ chức cho học sinh thực hành hoàn thiện sản phẩm, trưng bày sản phẩm theo nhóm, thuyết trình giới thiệu và thực hành đánh giá sản phẩm theo phiếu tiêu chí trong SGK (hoặc làm bài tập luyện tập phần cuối bài).
-            * 4. Hoạt động vận dụng, trải nghiệm: Tổ chức hoạt động Vận dụng toàn bài theo đúng SGK, liên hệ thực tiễn đời sống và tổng kết bài học.
+            * 1. Hoạt động mở đầu: BẮT BUỘC KHỞI ĐỘNG KẾT NỐI: Tổ chức trò chơi/câu hỏi cụ thể để Học sinh nhắc lại chính xác nội dung/các bước đã thực hiện ở Tiết ${currentPeriodInLesson - 1}, dẫn dắt vào nhiệm vụ của Tiết ${currentPeriodInLesson}.
+            * 2. Hoạt động hình thành kiến thức mới: Phân tích sâu nội dung phần cuối của bài học trong SGK (hoặc phân tích rõ từng tiêu chí đánh giá sản phẩm, cách trưng bày, giới thiệu sản phẩm, bảng tính chi phí/nội dung mục cuối trong SGK).
+            * 3. Hoạt động luyện tập, thực hành: Tổ chức cho học sinh thực hành hoàn thiện sản phẩm, trưng bày sản phẩm theo nhóm, thuyết trình giới thiệu và thực hành đánh giá sản phẩm theo phiếu tiêu chí trong SGK (hoặc giải quyết chi tiết bài tập luyện tập phần cuối bài).
+            * 4. Hoạt động vận dụng, trải nghiệm: Tổ chức hoạt động Vận dụng toàn bài theo đúng SGK, phân tích liên hệ thực tiễn đời sống và tổng kết bài học.
           ` : `
           + BẠN ĐANG SOẠN RIÊNG TIẾT ${currentPeriodInLesson} / ${totalLessonPeriods} (${totalDuration} phút - ĐỦ 4 HOẠT ĐỘNG):
             * ĐÂY LÀ TIẾT ${currentPeriodInLesson} (TIẾT NỐI TIẾP) CỦA BÀI HỌC. HỌC SINH ĐÃ HỌC TIẾT ${currentPeriodInLesson - 1} TRƯỚC ĐÓ RỒI.
-            * Mục I. Yêu cầu cần đạt: Ghi mục tiêu của PHẦN THỨ ${currentPeriodInLesson} / BƯỚC TIẾP THEO tương ứng trong SGK ở phía trên; nếu có tích hợp thì dòng yêu cầu cần đạt tích hợp đặt ở CUỐI CÙNG.
+            * Mục I. Yêu cầu cần đạt: Phân tích chi tiết mục tiêu của PHẦN THỨ ${currentPeriodInLesson} / BƯỚC TIẾP THEO tương ứng trong SGK ở phía trên; nếu có tích hợp thì dòng yêu cầu cần đạt tích hợp đặt ở CUỐI CÙNG.
             * Mục II. Đồ dùng dạy học: Thiết bị, học liệu cần cho phần nội dung của Tiết ${currentPeriodInLesson}.
-            * 1. Hoạt động mở đầu: BẮT BUỘC KHỞI ĐỘNG KẾT NỐI: Tổ chức trò chơi / câu hỏi để Học sinh NHẮC LẠI KIẾN THỨC ĐÃ HỌC Ở TIẾT ${currentPeriodInLesson - 1}, tạo cầu nối tự nhiên sang nội dung của Tiết ${currentPeriodInLesson}.
-            * 2. Hoạt động hình thành kiến thức mới: Khám phá sâu sắc kiến thức PHẦN THỨ ${currentPeriodInLesson} / CÁC BƯỚC THỰC HÀNH TIẾP THEO trong SGK (đúng 100% nội dung SGK).
-            * 3. Hoạt động luyện tập, thực hành: Thực hành các bước/câu hỏi/bài tập thuộc đúng phạm vi phần nội dung của Tiết ${currentPeriodInLesson} trong SGK.
+            * 1. Hoạt động mở đầu: BẮT BUỘC KHỞI ĐỘNG KẾT NỐI: Tổ chức trò chơi / câu hỏi cụ thể để Học sinh NHẮC LẠI CHÍNH XÁC KIẾN THỨC ĐÃ HỌC Ở TIẾT ${currentPeriodInLesson - 1}, tạo cầu nối tự nhiên sang nội dung của Tiết ${currentPeriodInLesson}.
+            * 2. Hoạt động hình thành kiến thức mới: Khám phá, phân tích sâu sắc kiến thức PHẦN THỨ ${currentPeriodInLesson} / CÁC BƯỚC THỰC HÀNH TIẾP THEO trong SGK (đúng 100% nội dung SGK).
+            * 3. Hoạt động luyện tập, thực hành: Thực hành và giải quyết chi tiết các bước/câu hỏi/bài tập thuộc đúng phạm vi phần nội dung của Tiết ${currentPeriodInLesson} trong SGK kèm lời giải dự kiến đầy đủ.
             * 4. Hoạt động vận dụng, trải nghiệm: Tổ chức hoạt động Vận dụng theo đúng SGK cho phần nội dung Tiết ${currentPeriodInLesson}, liên hệ thực tiễn và dặn dò chuẩn bị tiết tiếp theo.
           `}
         ` : `
-        - Bài học trọn vẹn 1 tiết (${totalDuration} phút): Bắt buộc phân bổ sâu sắc, đầy đủ cả 4 hoạt động (1. Hoạt động mở đầu, 2. Hoạt động hình thành kiến thức mới, 3. Hoạt động luyện tập, thực hành, 4. Hoạt động vận dụng, trải nghiệm) bám sát 100% nội dung bài học trong SGK.
+        - Bài học trọn vẹn 1 tiết (${totalDuration} phút): Bắt buộc phân bổ sâu sắc, phân tích chi tiết và khoa học đầy đủ cả 4 hoạt động (1. Hoạt động mở đầu, 2. Hoạt động hình thành kiến thức mới, 3. Hoạt động luyện tập, thực hành, 4. Hoạt động vận dụng, trải nghiệm) bám sát 100% nội dung bài học trong SGK.
         `}
 
         - QUY ĐỊNH CẤU TRÚC JSON BẮT BUỘC:
@@ -273,7 +338,7 @@ export const generateLessonPlan = async ({
             * activities[1].name = "2. Hoạt động hình thành kiến thức mới"
             * activities[2].name = "3. Hoạt động luyện tập, thực hành"
             * activities[3].name = "4. Hoạt động vận dụng, trải nghiệm"
-          + LƯU Ý CÚ PHÁP JSON: Bên trong các chuỗi văn bản tiếng Việt, hãy dùng dấu nháy đơn ('...') thay cho dấu ngoặc kép ("...") khi trích dẫn lời nói, tên trò chơi hoặc mức đánh giá để chuỗi JSON luôn hợp lệ tuyệt đối.
+          + LƯU Ý CÚ PHÁP JSON: Bên trong các chuỗi văn bản tiếng Việt, hãy dùng dấu nháy đơn ('...') thay cho dấu ngoặc kép ("...") khi trích dẫn lời nói, câu hỏi gợi mở, tên trò chơi hoặc mức đánh giá để chuỗi JSON luôn hợp lệ tuyệt đối.
 
         GHI CHÚ THÊM: ${inputData.context || ''}
         
@@ -287,32 +352,27 @@ export const generateLessonPlan = async ({
         2. **YÊU CẦU CẦN ĐẠT & TÍCH HỢP (QUY CHUẨN BẮT BUỘC):**
            - TUYỆT ĐỐI KHÔNG sử dụng đánh số 1, 2, 3, 4.
            - TUYỆT ĐỐI KHÔNG ghi "kiến thức", "năng lực", "phẩm chất", "Kiến thức, kỹ năng:", "Về năng lực:",...
-           - Thể hiện thuần túy bằng các GẠCH ĐẦU DÒNG NỘI DUNG. Mỗi phần tử trong mảng "objectives" BẮT ĐẦU bằng dấu gạch ngang "- ".
+           - Thể hiện thuần túy bằng các GẠCH ĐẦU DÒNG NỘI DUNG chi tiết, khoa học. Mỗi phần tử trong mảng "objectives" BẮT ĐẦU bằng dấu gạch ngang "- ".
            - ĐỐI VỚI TIẾT HỌC CÓ TÍCH HỢP:
              + Các yêu cầu cần đạt của bài học BẮT BUỘC nằm ở phía trên; nội dung tích hợp BẮT BUỘC nằm ở vị trí CUỐI CÙNG của mục I. Yêu cầu cần đạt.
              + Nội dung yêu cầu cần đạt tích hợp KHÔNG nằm trong kiến thức nội dung sẵn có của bài học, mà chỉ dựa vào nội dung của bài học để tạo ra nội dung yêu cầu cần đạt tích hợp đúng với môn học tích hợp và nội dung tích hợp.
              + Khi Yêu cầu cần đạt có phần tích hợp thì trong Các hoạt động dạy học BẮT BUỘC phải thể hiện rõ ràng, chính xác nội dung tích hợp đó ở cả cột Giáo viên và cột Học sinh: "- Tích hợp [Tên môn học / lĩnh vực tích hợp]: [Nội dung cụ thể...]".
-        3. **CHIỀU SÂU SƯ PHẠM, KPI GẠCH ĐẦU DÒNG VÀ NGUYÊN TẮC 1:1 NGANG HÀNG (Không tính hình ảnh và tích hợp):**
-            - Nội dung phải có chiều sâu chuyên môn, mô tả rõ câu hỏi gợi mở của GV, cách thức tổ chức hoạt động (nhóm đôi, nhóm 4, trò chơi, thảo luận...) và câu trả lời/thao tác cụ thể của HS bám sát 100% bài học trong SGK.
-            - 1. Hoạt động mở đầu >= 4 gạch đầu dòng.
-            - 2. Hoạt động hình thành kiến thức mới >= 8 gạch đầu dòng.
-            - 3. Hoạt động luyện tập, thực hành >= 10 gạch đầu dòng.
-            - 4. Hoạt động vận dụng, trải nghiệm >= 4 gạch đầu dòng.
+        3. **CHIỀU SÂU SƯ PHẠM KHOA HỌC, KHÔNG SOẠN SƠ SÀI, KPI GẠCH ĐẦU DÒNG VÀ NGUYÊN TẮC 1:1 NGANG HÀNG (Không tính hình ảnh và tích hợp):**
+            - Mỗi gạch đầu dòng phải phân tích rõ ràng, chi tiết câu hỏi gợi mở của GV, cách thức tổ chức hoạt động (nhóm đôi, nhóm 4, trò chơi, thảo luận...), lời giải/câu trả lời dự kiến đầy đủ của HS và kết luận kiến thức khoa học của GV bám sát 100% bài học trong SGK.
+            - 1. Hoạt động mở đầu >= 4 gạch đầu dòng chi tiết.
+            - 2. Hoạt động hình thành kiến thức mới >= 8 gạch đầu dòng chi tiết.
+            - 3. Hoạt động luyện tập, thực hành >= 10 gạch đầu dòng chi tiết.
+            - 4. Hoạt động vận dụng, trải nghiệm >= 4 gạch đầu dòng chi tiết.
             - BẮT BUỘC NGUYÊN TẮC 1:1 NGANG HÀNG: Cột "Hoạt động của Giáo viên" có bao nhiêu gạch đầu dòng thì cột "Hoạt động của Học sinh" BẮT BUỘC có đúng bấy nhiêu gạch đầu dòng đáp lại tương ứng (Tỷ lệ 1:1 tuyệt đối).
-        4. **HÌNH ẢNH TRỰC QUAN ĐI ĐÚNG VÀO TRỌNG TÂM (BẮT BUỘC TỪ 3 ĐẾN 4 HÌNH / TIẾT, CẤM HÌNH ẢNH LAN MAN):**
+        4. **HÌNH ẢNH TRỰC QUAN ĐI ĐÚNG VÀO NỘI DUNG TRỌNG TÂM — KHÔNG CÓ CHI TIẾT THỪA (BẮT BUỘC TỪ 3 ĐẾN 4 HÌNH / TIẾT):**
             - BẮT BUỘC có đúng **từ 3 đến 4 hình ảnh minh họa trực quan** trong tiết học này (phân bổ vào Hoạt động 1: 1 hình, Hoạt động 2: 1-2 hình, Hoạt động 3: 1 hình), CHỈ CÓ Ở CỘT GIÁO VIÊN, không dùng gạch đầu dòng trước thẻ hình ảnh.
-            - NGUYÊN TẮC ĐI ĐÚNG VÀO TRỌNG TÂM: Hình ảnh phải đi thẳng 100% vào trọng tâm đối tượng cần quan sát (cận cảnh VẬT THỂ, THIẾT BỊ, CÁC BỘ PHẬN CẤU TẠO, SƠ ĐỒ MỐI QUAN HỆ KỸ THUẬT, BẢNG DANH MỤC CHƯƠNG TRÌNH, SẢN PHẨM MẪU hoặc MÀN HÌNH GIAO DIỆN cụ thể được nhắc đến ở câu văn ngay phía trên nó và trong bài học "${baseLessonName}" của SGK).
-            - TUYỆT ĐỐI KHÔNG tạo hình ảnh lan man (không mô tả cảnh giáo viên đứng giảng bài, không mô tả cảnh học sinh ngồi thảo luận nhóm chung chung, không vẽ sơ đồ tư duy mindmap, infographic, phiếu học tập hay các chi tiết thừa ngoài lề)!
-            - Cú pháp: \`[Gợi ý hình ảnh: Mô tả cận cảnh, đi thẳng vào đúng trọng tâm đối tượng/cấu tạo/kênh hình SGK vừa nêu ở câu văn ngay phía trên, không lan man]\`.
+            - NGUYÊN TẮC ĐI ĐÚNG VÀO TRỌNG TÂM & KHÔNG CÓ CHI TIẾT THỪA: Hình ảnh chỉ mô tả duy nhất 100% đối tượng trọng tâm cần quan sát trên nền trắng sạch (cận cảnh VẬT THỂ, THIẾT BỊ, CÁC BỘ PHẬN CẤU TẠO, SƠ ĐỒ MỐI QUAN HỆ KỸ THUẬT, BẢNG DANH MỤC CHƯƠNG TRÌNH, SẢN PHẨM MẪU hoặc MÀN HÌNH GIAO DIỆN cụ thể trong bài học "${baseLessonName}" của SGK).
+            - TUYỆT ĐỐI KHÔNG đưa các chi tiết thừa hoặc cảnh lớp học, giáo viên, học sinh vào mô tả hình ảnh!
+            - Cú pháp: \`[Gợi ý hình ảnh: Cận cảnh trực quan đúng đối tượng trọng tâm (nêu rõ vật thể/bộ phận cấu tạo/sơ đồ/bảng biểu hoặc màn hình giao diện của bài học trên nền trắng sạch)]\`.
         5. **THỜI GIAN LINH HOẠT VÀ CHÍNH XÁC:**
             - Phân bổ thời gian linh hoạt, bám sát nội dung thực tế của 4 hoạt động (ví dụ đối với tiết ${totalDuration} phút: Mở đầu 4-5 phút, KT mới 12-15 phút, Luyện tập 11-14 phút, Vận dụng 4-5 phút).
             - BẮT BUỘC: Tổng số phút của cả 4 hoạt động cộng lại PHẢI BẰNG ĐÚNG CHÍNH XÁC ${totalDuration} phút.
     `;
-
-    const finalApiKey = resolveGeminiApiKey(apiKey);
-    if (!finalApiKey) {
-        throw new Error("Vui lòng nhập Gemini API Key ở thanh công cụ phía trên để tạo giáo án.");
-    }
 
     const parts: any[] = [];
     const inlineParts: any[] = [];
@@ -371,7 +431,7 @@ export const generateLessonPlan = async ({
         // Nếu file > 2MB (như file PDF SGK 8.8MB), ưu tiên tải lên Google File API 1 lần duy nhất rồi dùng lại URI
         // giúp soạn 35 tuần cực nhanh, không phải upload lại 12MB dữ liệu mỗi tuần
         if (file.size > 2 * 1024 * 1024) {
-            const cacheKey = `${finalApiKey.slice(-6)}-${file.name}-${file.size}-${file.lastModified}`;
+            const cacheKey = `srv-${file.name}-${file.size}-${file.lastModified}`;
             if (uploadedFileCache && uploadedFileCache.has(cacheKey)) {
                 const cached = uploadedFileCache.get(cacheKey)!;
                 parts.push({
@@ -381,12 +441,11 @@ export const generateLessonPlan = async ({
             }
 
             try {
-                const ai = new GoogleGenAI({ apiKey: finalApiKey });
-                const uploaded = await ai.files.upload({ file: file, mimeType: mimeType } as any);
+                const uploaded = await callServerUploadFile({ file, mimeType, cacheKey });
                 
                 if (uploadedFileCache) {
                     uploadedFileCache.set(cacheKey, { uri: uploaded.uri, mimeType: uploaded.mimeType, name: uploaded.name });
-                } else {
+                } else if (uploaded.name) {
                     uploadedFileNames.push(uploaded.name);
                 }
 
@@ -472,10 +531,6 @@ export const generateLessonPlan = async ({
         for (let i = 0; i < maxAttempts; i++) {
             const currentModel = modelsToTry[i % modelsToTry.length];
             try {
-                const ai = new GoogleGenAI({
-                    apiKey: finalApiKey
-                });
-
                 // Chiến lược thích ứng 3 tầng (3-Tier Progressive Retry):
                 // - Tầng 1 (Lần thử 0..4): Dùng fileUri/parts đầy đủ + responseSchema chuẩn + temperature 0.2
                 // - Tầng 2 (Lần thử 5..8): Dùng inlineParts + bỏ responseSchema (giữ responseMimeType: application/json) + temperature 0.35 để vượt qua lỗi RECITATION / schema quá chặt ở các bài dự án cuối sách
@@ -509,7 +564,7 @@ export const generateLessonPlan = async ({
                     };
                 }
 
-                const response = await ai.models.generateContent({
+                const response = await callServerGenerateContent({
                     model: currentModel,
                     contents: { parts: activeParts },
                     config
@@ -605,30 +660,16 @@ export const generateLessonPlan = async ({
         }
         throw new Error("Không thể kết nối với AI sau nhiều lần thử.");
     } finally {
-        if (uploadedFileNames.length > 0 && finalApiKey) {
-            try {
-                const ai = new GoogleGenAI({ apiKey: finalApiKey });
-                for (const name of uploadedFileNames) {
-                    await ai.files.delete({ name }).catch(() => {});
-                }
-            } catch(e) {
-                console.warn("Lỗi khi xoá file tạm:", e);
-            }
+        if (uploadedFileNames.length > 0) {
+            await callServerDeleteFiles(uploadedFileNames);
         }
     }
 };
 
 export const extractLessonsFromPpct = async (
     ppctFile: File,
-    apiKey: string
+    _apiKey?: string
 ): Promise<PpctLesson[]> => {
-    const finalApiKey = resolveGeminiApiKey(apiKey);
-    
-    if (!finalApiKey) {
-        throw new Error("Vui lòng nhập Gemini API Key ở thanh công cụ phía trên để phân tích file Phân phối chương trình.");
-    }
-
-    const ai = new GoogleGenAI({ apiKey: finalApiKey });
     const fileNameLower = ppctFile.name.toLowerCase();
 
     let filePart: any;
@@ -664,7 +705,7 @@ export const extractLessonsFromPpct = async (
             };
         } else {
             try {
-                const uploaded = await ai.files.upload({ file: ppctFile, mimeType } as any);
+                const uploaded = await callServerUploadFile({ file: ppctFile, mimeType });
                 uploadedName = uploaded.name;
                 filePart = {
                     fileData: { fileUri: uploaded.uri, mimeType: uploaded.mimeType }
@@ -750,7 +791,7 @@ TUYỆT ĐỐI KHÔNG thêm văn bản giải thích hay markdown bên ngoài ch
                     config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
                 }
 
-                const response = await ai.models.generateContent({
+                const response = await callServerGenerateContent({
                     model: ppctModel,
                     contents: [
                         filePart,
@@ -765,7 +806,7 @@ TUYỆT ĐỐI KHÔNG thêm văn bản giải thích hay markdown bên ngoài ch
                 console.warn(`PPCT extraction attempt ${attempt + 1}/${maxPpctAttempts} with ${ppctModel} failed:`, e?.message || e);
                 const msg = String(e?.message || JSON.stringify(e || '')).toLowerCase();
                 if (msg.includes('api_key_invalid') || msg.includes('api key not valid') || msg.includes('permission_denied')) {
-                    throw new Error("Gemini API Key không hợp lệ. Vui lòng kiểm tra lại API Key.");
+                    throw new Error("Gemini API Key không hợp lệ. Vui lòng kiểm tra lại cấu hình API Key.");
                 }
                 // Chờ ngắn khi đổi sang pool model tiếp theo, hoặc chờ lâu hơn nếu đã hết 1 vòng các model
                 const waitMs = (attempt + 1) % ppctModels.length === 0 ? 1800 : 450;
@@ -779,7 +820,7 @@ TUYỆT ĐỐI KHÔNG thêm văn bản giải thích hay markdown bên ngoài ch
                 throw new Error("Máy chủ AI đang có lượng truy cập cao đột biến. Vui lòng bấm 'Phân tích lại file PPCT' sau vài giây.");
             }
             if (errStr.includes('429') || errStr.includes('quota') || errStr.includes('resource_exhausted')) {
-                throw new Error("API Key đang tạm thời chạm giới hạn lượt gọi (Quota/429). Vui lòng đợi khoảng 30 giây rồi bấm 'Phân tích lại file PPCT' hoặc nhập API Key khác.");
+                throw new Error("API Key đang tạm thời chạm giới hạn lượt gọi (Quota/429). Vui lòng đợi khoảng 30 giây rồi bấm 'Phân tích lại file PPCT'.");
             }
             throw new Error("Không thể phân tích file PPCT lúc này. Vui lòng bấm 'Phân tích lại file PPCT' để thử lại.");
         }
@@ -806,9 +847,7 @@ TUYỆT ĐỐI KHÔNG thêm văn bản giải thích hay markdown bên ngoài ch
         throw new Error("Không tìm thấy bài học nào trong bảng phân phối chương trình.");
     } finally {
         if (uploadedName) {
-            try {
-                await ai.files.delete({ name: uploadedName });
-            } catch(e) {}
+            await callServerDeleteFiles([uploadedName]);
         }
     }
 };

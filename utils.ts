@@ -146,18 +146,33 @@ export const ensureFourActivitiesInAllPeriods = (
             buildFallback: (periodNum: number) => ({
                 name: "1. Hoạt động mở đầu",
                 time: "5'",
+                topic: periodNum > 1
+                    ? `* Khởi động và kết nối: Ôn lại kiến thức tiết trước và dẫn dắt vào nội dung tiết ${periodNum}`
+                    : `* Khởi động và kết nối: Tình huống thực tiễn dẫn dắt vào bài học "${baseTitle}"`,
                 rows: [
                     {
                         teacher: periodNum > 1
-                            ? `- Tổ chức trò chơi khởi động kết nối kiến thức đã học ở tiết trước với nội dung tiếp theo của bài "${baseTitle}".\n- Đặt câu hỏi gợi mở để HS chia sẻ hiểu biết hoặc trải nghiệm thực tế liên quan đến bài học.`
-                            : `- Tạo không khí vui tươi, phấn khởi trước khi vào tiết học.\n- Tổ chức tình huống khởi động gắn với thực tiễn để dẫn dắt vào bài học "${baseTitle}".`,
+                            ? `- Giáo viên tổ chức trò chơi khởi động kết nối kiến thức đã học ở tiết trước với nội dung tiếp theo của bài "${baseTitle}".`
+                            : `- Giáo viên tổ chức hoạt động khởi động, trình chiếu hình ảnh/tình huống mở đầu trong SGK để tạo hứng thú cho học sinh trước khi vào bài "${baseTitle}".`,
                         student: periodNum > 1
-                            ? `- HS hào hứng tham gia trò chơi khởi động và ôn lại kiến thức tiết trước.\n- HS suy nghĩ, trả lời câu hỏi gợi mở của GV.`
-                            : `- HS tham gia hoạt động khởi động với tinh thần sôi nổi, tích cực.\n- HS quan sát tình huống và chia sẻ ý kiến cá nhân.`
+                            ? `- Học sinh hào hứng tham gia trò chơi khởi động, nhớ lại các kiến thức cốt lõi đã tìm hiểu ở tiết học trước.`
+                            : `- Học sinh chăm chú quan sát tình huống mở đầu trên màn chiếu và hào hứng tham gia hoạt động khởi động.`
                     },
                     {
-                        teacher: `- Nhận xét, tuyên dương tinh thần học tập của HS và giới thiệu trực tiếp vào nội dung bài học mới.\n- Ghi tên bài học lên bảng.`,
-                        student: `- HS lắng nghe, mở SGK và ghi tên bài học vào vở.`
+                        teacher: periodNum > 1
+                            ? `- Giáo viên nêu câu hỏi gợi mở: "Em hãy nhắc lại nội dung chính đã học ở tiết trước và cho biết ý nghĩa của nội dung đó trong thực tế?"`
+                            : `- Giáo viên đặt câu hỏi gợi mở gắn với tình huống mở đầu: "Quan sát tình huống trên, em nhận thấy điều gì quen thuộc và điều gì chúng ta cần khám phá trong bài học hôm nay?"`,
+                        student: periodNum > 1
+                            ? `- Học sinh xung phong trả lời câu hỏi, nêu lại chính xác các nội dung trọng tâm đã học ở tiết trước.`
+                            : `- Học sinh suy nghĩ cá nhân, mạnh dạn giơ tay chia sẻ nhận xét và trải nghiệm thực tế của bản thân về tình huống mở đầu.`
+                    },
+                    {
+                        teacher: `- Giáo viên mời 1 - 2 học sinh nhận xét, bổ sung câu trả lời của bạn.`,
+                        student: `- Học sinh lắng nghe câu trả lời của bạn, đưa ra ý kiến nhận xét và bổ sung.`
+                    },
+                    {
+                        teacher: `- Giáo viên nhận xét, biểu dương tinh thần học tập của cả lớp, kết nối trực tiếp vào bài học "${baseTitle}" (Tiết ${periodNum}) và ghi tên bài lên bảng.`,
+                        student: `- Học sinh lắng nghe lời giới thiệu của giáo viên, mở SGK đúng trang bài học và ghi tên bài vào vở.`
                     }
                 ]
             })
@@ -169,19 +184,39 @@ export const ensureFourActivitiesInAllPeriods = (
             buildFallback: () => ({
                 name: "2. Hoạt động hình thành kiến thức mới",
                 time: "15'",
-                topic: `* Tìm hiểu nội dung trọng tâm của bài học`,
+                topic: `* Khám phá và phân tích nội dung kiến thức trọng tâm của bài "${baseTitle}"`,
                 rows: [
                     {
-                        teacher: `- Yêu cầu HS quan sát kênh hình, đọc thông tin trong SGK của bài "${baseTitle}" và thảo luận nhóm đôi để trả lời câu hỏi tìm hiểu bài.\n[Gợi ý hình ảnh: Hình ảnh minh họa nội dung khám phá kiến thức mới của bài ${baseTitle} trong SGK]`,
-                        student: `- HS quan sát hình minh họa, đọc thông tin trong SGK và thảo luận nhóm đôi theo yêu cầu.`
+                        teacher: `- Giáo viên yêu cầu học sinh mở SGK, quan sát kênh hình minh họa và đọc kỹ thông tin phần Khám phá của bài "${baseTitle}".\n[Gợi ý hình ảnh: Cận cảnh trực quan đối tượng, cấu tạo bộ phận hoặc sơ đồ nguyên lý trọng tâm trong phần Khám phá của bài ${baseTitle}]`,
+                        student: `- Học sinh mở SGK, tập trung quan sát từng chi tiết trên hình minh họa và đọc thầm phần thông tin kiến thức mới.`
                     },
                     {
-                        teacher: `- Mời đại diện một số nhóm trình bày kết quả tìm hiểu trước lớp.\n- Tổ chức cho các nhóm khác nhận xét, bổ sung và đặt câu hỏi phản biện.`,
-                        student: `- Đại diện nhóm trình bày kết quả thảo luận.\n- Các nhóm khác lắng nghe, nhận xét và bổ sung ý kiến.`
+                        teacher: `- Giáo viên chia lớp thành các nhóm 4, giao nhiệm vụ thảo luận và đặt câu hỏi phân tích: "Quan sát hình minh họa trong SGK, em hãy nêu rõ các đặc điểm, bộ phận hoặc các bước thực hiện chính được thể hiện trong hình?"`,
+                        student: `- Học sinh nhanh chóng tạo nhóm 4, phân công nhiệm vụ, cùng quan sát kênh hình và trao đổi để trả lời câu hỏi của giáo viên.`
                     },
                     {
-                        teacher: `- Nhận xét, phân tích làm rõ kiến thức trọng tâm và chốt lại nội dung ghi nhớ của bài học.`,
-                        student: `- HS lắng nghe, ghi nhớ kiến thức cốt lõi của bài học.`
+                        teacher: `- Giáo viên đi đến từng nhóm quan sát, lắng nghe và gợi ý cho những nhóm còn lúng túng cách đối chiếu giữa hình vẽ với nội dung chữ trong SGK.`,
+                        student: `- Học sinh trong nhóm chỉ vào từng chi tiết trên hình minh họa, đối chiếu với thông tin trong SGK để thống nhất câu trả lời.`
+                    },
+                    {
+                        teacher: `- Giáo viên mời đại diện 2 - 3 nhóm trình bày kết quả thảo luận trước lớp.`,
+                        student: `- Đại diện các nhóm tự tin trình bày đầy đủ các đặc điểm, bộ phận và nội dung kiến thức vừa tìm hiểu được trước lớp.`
+                    },
+                    {
+                        teacher: `- Giáo viên tổ chức cho các nhóm khác nhận xét, đối chiếu và đặt câu hỏi phản biện cho nhóm bạn.`,
+                        student: `- Các nhóm khác chăm chú lắng nghe, nhận xét phần trình bày của bạn và bổ sung những chi tiết còn thiếu.`
+                    },
+                    {
+                        teacher: `- Giáo viên đặt thêm câu hỏi đào sâu kiến thức: "Vì sao chúng ta cần nắm vững đặc điểm/quy trình này khi thao tác hoặc vận dụng trong thực tế?"`,
+                        student: `- Học sinh suy nghĩ, phân tích nguyên nhân – kết quả và trả lời dựa trên nội dung vừa khám phá trong SGK.`
+                    },
+                    {
+                        teacher: `- Giáo viên phân tích, giải thích làm rõ bản chất khoa học của từng nội dung và chốt lại kết luận kiến thức trọng tâm của bài "${baseTitle}".`,
+                        student: `- Học sinh lắng nghe giáo viên phân tích, nắm vững bản chất kiến thức cốt lõi của bài học.`
+                    },
+                    {
+                        teacher: `- Giáo viên mời 1 - 2 học sinh đọc to mục Ghi nhớ / Kết luận trong SGK trước lớp.`,
+                        student: `- Học sinh đọc to, rõ ràng nội dung mục Ghi nhớ trong SGK; cả lớp đọc thầm và khắc sâu kiến thức.`
                     }
                 ]
             })
@@ -193,19 +228,35 @@ export const ensureFourActivitiesInAllPeriods = (
             buildFallback: () => ({
                 name: "3. Hoạt động luyện tập, thực hành",
                 time: "10'",
-                topic: `* Thực hành, luyện tập củng cố kiến thức`,
+                topic: `* Luyện tập, thực hành củng cố kiến thức và rèn luyện kỹ năng bài "${baseTitle}"`,
                 rows: [
                     {
-                        teacher: `- Giao nhiệm vụ cho HS thực hiện các bài tập/hoạt động thực hành trong SGK của bài "${baseTitle}".\n- Hướng dẫn tiêu chí thực hiện và quan sát, hỗ trợ kịp thời những HS gặp khó khăn.`,
-                        student: `- HS đọc kỹ yêu cầu bài tập trong SGK.\n- Thực hiện nhiệm vụ luyện tập, thực hành cá nhân hoặc theo nhóm.`
+                        teacher: `- Giáo viên giới thiệu yêu cầu phần Luyện tập / Thực hành trong SGK của bài "${baseTitle}", trình chiếu bảng bài tập hoặc quy trình thao tác mẫu.\n[Gợi ý hình ảnh: Cận cảnh sơ đồ bài tập, bảng phân loại hoặc các bước thao tác thực hành chuẩn của bài ${baseTitle}]`,
+                        student: `- Học sinh đọc kỹ yêu cầu bài tập thực hành trong SGK và quan sát phần minh họa trên màn chiếu.`
                     },
                     {
-                        teacher: `- Tổ chức cho HS trình bày sản phẩm thực hành hoặc kết quả làm bài trước lớp.\n- Tổ chức cho HS nhận xét chéo và đánh giá kết quả thực hiện.`,
-                        student: `- Đại diện HS trình bày kết quả bài tập/thao tác thực hành.\n- HS lớp nhận xét, đối chiếu và tự điều chỉnh bài làm.`
+                        teacher: `- Giáo viên hướng dẫn chi tiết từng bước thực hiện và nêu rõ các tiêu chí đánh giá kết quả bài làm/sản phẩm thực hành.`,
+                        student: `- Học sinh lắng nghe, ghi nhớ quy trình các bước thực hiện và các tiêu chí đánh giá.`
                     },
                     {
-                        teacher: `- Nhận xét, tuyên dương các cá nhân/nhóm thực hiện tốt và khắc sâu kỹ năng trọng tâm.`,
-                        student: `- HS lắng nghe nhận xét của GV và hoàn thiện bài làm.`
+                        teacher: `- Giáo viên tổ chức cho học sinh thực hiện nhiệm vụ luyện tập, thực hành cá nhân hoặc theo nhóm đôi.`,
+                        student: `- Học sinh tích cực thực hiện bài tập luyện tập và thao tác thực hành đúng theo quy trình đã được hướng dẫn.`
+                    },
+                    {
+                        teacher: `- Giáo viên quan sát bao quát lớp, kịp thời hướng dẫn, uốn nắn thao tác và hỗ trợ những học sinh còn gặp khó khăn.\n[Gợi ý hình ảnh: Cận cảnh sản phẩm mẫu hoặc kết quả hoàn chỉnh đúng tiêu chí kỹ thuật của bài ${baseTitle}]`,
+                        student: `- Học sinh chủ động trao đổi với bạn cùng bàn, tự kiểm tra và điều chỉnh thao tác để hoàn thành tốt nhiệm vụ.`
+                    },
+                    {
+                        teacher: `- Giáo viên mời đại diện một số cá nhân/nhóm lên trình bày kết quả làm bài hoặc trưng bày sản phẩm thực hành trước lớp.`,
+                        student: `- Đại diện học sinh/nhóm tự tin trình bày kết quả bài tập hoặc giới thiệu sản phẩm thực hành và nêu rõ cách làm.`
+                    },
+                    {
+                        teacher: `- Giáo viên hướng dẫn cả lớp nhận xét, đánh giá chéo bài làm của bạn dựa trên các tiêu chí đã nêu.`,
+                        student: `- Học sinh đối chiếu với tiêu chí đánh giá, nhận xét ưu điểm và góp ý cách khắc phục hạn chế cho bài làm của bạn.`
+                    },
+                    {
+                        teacher: `- Giáo viên nhận xét chi tiết, phân tích những lỗi sai thường gặp để học sinh rút kinh nghiệm và tuyên dương các cá nhân/nhóm thực hiện chính xác.`,
+                        student: `- Học sinh lắng nghe nhận xét của giáo viên, tự sửa chữa và hoàn thiện bài làm của mình.`
                     }
                 ]
             })
@@ -217,14 +268,23 @@ export const ensureFourActivitiesInAllPeriods = (
             buildFallback: () => ({
                 name: "4. Hoạt động vận dụng, trải nghiệm",
                 time: "5'",
+                topic: `* Vận dụng kiến thức vào thực tiễn cuộc sống`,
                 rows: [
                     {
-                        teacher: `- Nêu câu hỏi/tình huống vận dụng thực tiễn để HS liên hệ kiến thức vừa học trong bài "${baseTitle}" vào cuộc sống hằng ngày.\n- Khuyến khích HS chia sẻ cách xử lý tình huống hoặc ý tưởng sáng tạo của bản thân.`,
-                        student: `- HS suy nghĩ, liên hệ thực tế và chia sẻ cách vận dụng kiến thức đã học vào cuộc sống.\n- Lắng nghe và góp ý cho phần chia sẻ của bạn.`
+                        teacher: `- Giáo viên nêu tình huống thực tiễn gắn với mục Vận dụng trong SGK của bài "${baseTitle}" và đặt câu hỏi: "Em sẽ vận dụng kiến thức vừa học như thế nào để giải quyết tình huống này trong học tập và sinh hoạt hằng ngày?"`,
+                        student: `- Học sinh lắng nghe tình huống, suy nghĩ liên hệ với thực tế gia đình, nhà trường để tìm phương án xử lý phù hợp.`
                     },
                     {
-                        teacher: `- Nhận xét chung tiết học, biểu dương các cá nhân và nhóm học tập tích cực.\n- Dặn dò HS thực hành vận dụng tại nhà và chuẩn bị cho tiết học tiếp theo.`,
-                        student: `- HS lắng nghe, tự đánh giá kết quả học tập và ghi nhớ nội dung dặn dò của GV.`
+                        teacher: `- Giáo viên mời 2 - 3 học sinh chia sẻ cách xử lý tình huống hoặc ý tưởng vận dụng sáng tạo trước lớp.`,
+                        student: `- Học sinh hào hứng chia sẻ cách vận dụng kiến thức bài học vào cuộc sống hằng ngày một cách cụ thể, thiết thực.`
+                    },
+                    {
+                        teacher: `- Giáo viên tổ chức cho các học sinh khác nhận xét, bổ sung ý tưởng cho bạn.`,
+                        student: `- Học sinh lắng nghe phần chia sẻ của bạn và đóng góp thêm các cách vận dụng hay, an toàn, hiệu quả.`
+                    },
+                    {
+                        teacher: `- Giáo viên nhận xét chung tiết học, khen ngợi các cá nhân, nhóm học tập tích cực và dặn dò học sinh thực hành vận dụng tại nhà, chuẩn bị cho tiết học sau.`,
+                        student: `- Học sinh lắng nghe, ghi nhớ nội dung dặn dò của giáo viên để thực hiện cùng người thân tại nhà.`
                     }
                 ]
             })
@@ -390,10 +450,13 @@ export const ensureFourActivitiesInAllPeriods = (
                 .replace(/^[-–\*\s]+/, '')
                 .replace(/^(Giáo\s*viên|GV)\s*[:\-\–]?\s*/i, '')
                 .replace(
-                    /^(tổ\s*chức\s*trò\s*chơi\s*['"][^'"]+['"]\s*(bằng\s*cách|,\s*yêu\s*cầu\s*học\s*sinh)?|chia\s*lớp\s*thành\s*[^,]+,\s*(giao\s*nhiệm\s*vụ|yêu\s*cầu)\s*(cho\s*các\s*nhóm|học\s*sinh)?|yêu\s*cầu\s*(học\s*sinh|hs|các\s*nhóm)\s*(mở\s*sgk\s*trang\s*\d+\s*,?\s*)?(quan\s*sát|đọc\s*thầm|tìm\s*hiểu|thảo\s*luận)?|trình\s*chiếu\s*(lại\s*)?(hình\s*ảnh|kênh\s*hình|sơ\s*đồ|mô\s*hình|vật\s*mẫu)?|hướng\s*dẫn\s*(học\s*sinh|hs)\s*(chú\s*ý\s*)?(quan\s*sát|đối\s*chiếu)?)\s*/i,
+                    /^(tổ\s*chức\s*trò\s*chơi\s*['"][^'"]+['"]\s*(bằng\s*cách|,\s*yêu\s*cầu\s*học\s*sinh)?|chia\s*lớp\s*thành\s*[^,]+,\s*(giao\s*nhiệm\s*vụ|yêu\s*cầu)\s*(cho\s*các\s*nhóm|học\s*sinh)?|yêu\s*cầu\s*(học\s*sinh|hs|các\s*nhóm)\s*(mở\s*sgk\s*(trang\s*\d+)?\s*,?\s*)?(quan\s*sát|đọc\s*thầm|tìm\s*hiểu|thảo\s*luận)?|trình\s*chiếu\s*(lại\s*)?(hình\s*ảnh|kênh\s*hình|sơ\s*đồ|mô\s*hình|vật\s*mẫu)?|hướng\s*dẫn\s*(học\s*sinh|hs)\s*(chú\s*ý\s*)?(quan\s*sát|đối\s*chiếu)?)\s*/i,
                     ''
                 )
-                .replace(/\s*(để\s*học\s*sinh\s*ôn\s*lại\s*kiến\s*thức|để\s*cả\s*lớp\s*thảo\s*luận|và\s*thảo\s*luận\s*nhóm.*)$/i, '')
+                .replace(
+                    /\s*(để\s*học\s*sinh\s*ôn\s*lại\s*kiến\s*thức.*|để\s*cả\s*lớp\s*thảo\s*luận.*|và\s*thảo\s*luận\s*nhóm.*|và\s*đặt\s*câu\s*hỏi.*|và\s*trả\s*lời\s*câu\s*hỏi.*)$/i,
+                    ''
+                )
                 .replace(/[\.\:\;]+$/, '')
                 .trim();
         };
@@ -411,11 +474,13 @@ export const ensureFourActivitiesInAllPeriods = (
                     )
                 ) ||
                 candidatePool[0] ||
-                `Đối tượng trọng tâm thuộc ${actName} của bài ${baseTitle}`;
+                `Cấu tạo và đặc điểm trọng tâm thuộc ${actName} của bài ${baseTitle}`;
 
-            const coreFocalObject = stripClassroomManagementWrapper(anchorLine) || `Đối tượng trọng tâm của bài ${baseTitle}`;
+            const coreFocalObject =
+                stripClassroomManagementWrapper(anchorLine) ||
+                `Đối tượng và cấu tạo trọng tâm của bài ${baseTitle}`;
 
-            return `[Gợi ý hình ảnh: Cận cảnh trực quan đi thẳng vào trọng tâm đối tượng/cấu tạo/sơ đồ/bảng biểu: ${coreFocalObject} (Bài học: ${baseTitle})]`;
+            return `[Gợi ý hình ảnh: Cận cảnh trực quan ${coreFocalObject}]`;
         };
 
         // Nếu tổng số hình ảnh trong tiết < 3, tự động bổ sung vào các hoạt động ưu tiên (HĐ 2 -> HĐ 3 -> HĐ 1 -> HĐ 4)

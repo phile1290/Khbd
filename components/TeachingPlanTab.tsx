@@ -12,7 +12,8 @@ import {
     parseKhdhTemplateFile, 
     matchAndBuildKhdhPlan,
     getWeekDateRange,
-    formatLessonNameWithPeriod
+    formatLessonNameWithPeriod,
+    parseWeekNumbersFromText
 } from '../services/khdhService';
 import { 
     exportKhdhToWord, 
@@ -74,14 +75,21 @@ export const TeachingPlanTab: React.FC<TeachingPlanTabProps> = ({
         const weekSet = new Set<number>();
         extractedPpcts.forEach(subj => {
             (subj.lessons || []).forEach(lesson => {
-                const wNum = lesson.weekNumber || parseInt(String(lesson.week || '').replace(/\D/g, ''), 10);
-                if (!isNaN(wNum) && wNum >= 1 && wNum <= 52) {
-                    weekSet.add(wNum);
-                }
+                const parsedWeeks = parseWeekNumbersFromText(lesson.week || lesson.weekNumber);
+                parsedWeeks.forEach(wNum => {
+                    if (!isNaN(wNum) && wNum >= 1 && wNum <= 52) {
+                        weekSet.add(wNum);
+                    }
+                });
             });
         });
         if (weekSet.size === 0) {
             return Array.from({ length: 35 }, (_, i) => i + 1);
+        }
+        // Nếu người dùng tải lên cả môn 12 tiết, 18 tiết và môn 35 tiết, đảm bảo danh sách tuần đầy đủ 1..maxWeek
+        const maxWeek = Math.max(...Array.from(weekSet), 35);
+        for (let w = 1; w <= Math.min(maxWeek, 35); w++) {
+            weekSet.add(w);
         }
         return Array.from(weekSet).sort((a, b) => a - b);
     }, [extractedPpcts]);
@@ -142,10 +150,6 @@ export const TeachingPlanTab: React.FC<TeachingPlanTabProps> = ({
     };
 
     const handleExtractAllPpcts = async () => {
-        if (!apiKey.trim()) {
-            setErrorMessage('Vui lòng nhập Gemini API Key ở thanh điều khiển trước khi phân tích PPCT.');
-            return;
-        }
         if (ppctFiles.length === 0) {
             setErrorMessage('Vui lòng chọn ít nhất một file Phân phối chương trình (PDF hoặc ảnh).');
             return;
@@ -156,7 +160,7 @@ export const TeachingPlanTab: React.FC<TeachingPlanTabProps> = ({
         setPpctStatusMessage('Đang đọc dữ liệu từ các file PPCT...');
 
         try {
-            const data = await extractMultiplePpcts(ppctFiles, apiKey.trim());
+            const data = await extractMultiplePpcts(ppctFiles, apiKey);
             setExtractedPpcts(data);
             const totalLessons = data.reduce((acc, cur) => acc + cur.lessons.length, 0);
             setPpctStatusMessage(`Đã đọc thành công ${data.length} môn học (${totalLessons} bài học). Sẵn sàng chuyển sang Bước 2.`);
@@ -177,32 +181,28 @@ export const TeachingPlanTab: React.FC<TeachingPlanTabProps> = ({
             setTemplateFile(file);
             setErrorMessage('');
 
-            if (apiKey.trim()) {
-                setIsParsingTemplate(true);
-                try {
-                    const parsed = await parseKhdhTemplateFile(file, apiKey.trim());
-                    if (parsed.rawRows && parsed.rawRows.length > 0) {
-                        setParsedTemplateRows(parsed.rawRows);
-                        if (parsed.weekNumber) {
-                            const parsedNum = parseInt(String(parsed.weekNumber).replace(/\D/g, ''), 10);
-                            if (parsedNum) {
-                                setTargetWeek(parsedNum);
-                                setDateRange(parsed.dateRange || getWeekDateRange(parsedNum).dateRange);
-                            }
+            setIsParsingTemplate(true);
+            try {
+                const parsed = await parseKhdhTemplateFile(file, apiKey);
+                if (parsed.rawRows && parsed.rawRows.length > 0) {
+                    setParsedTemplateRows(parsed.rawRows);
+                    if (parsed.weekNumber) {
+                        const parsedNum = parseInt(String(parsed.weekNumber).replace(/\D/g, ''), 10);
+                        if (parsedNum) {
+                            setTargetWeek(parsedNum);
+                            setDateRange(parsed.dateRange || getWeekDateRange(parsedNum).dateRange);
                         }
-                        if (parsed.layoutOrientation) setLayoutOrientation(parsed.layoutOrientation);
-                        setSuccessMessage(`Đã đọc thành công khung mẫu KHDH gồm ${parsed.rawRows.length} tiết từ file "${file.name}". Sẵn sàng sang Bước 3.`);
-                    } else {
-                        setErrorMessage('Không nhận diện được bảng biểu trong file mẫu đã tải lên. Vui lòng kiểm tra lại file Word/PDF/Ảnh.');
                     }
-                } catch (err: any) {
-                    console.warn(err);
-                    setErrorMessage('Lỗi khi đọc file mẫu: ' + (err.message || 'Không thể trích xuất'));
-                } finally {
-                    setIsParsingTemplate(false);
+                    if (parsed.layoutOrientation) setLayoutOrientation(parsed.layoutOrientation);
+                    setSuccessMessage(`Đã đọc thành công khung mẫu KHDH gồm ${parsed.rawRows.length} tiết từ file "${file.name}". Sẵn sàng sang Bước 3.`);
+                } else {
+                    setErrorMessage('Không nhận diện được bảng biểu trong file mẫu đã tải lên. Vui lòng kiểm tra lại file Word/PDF/Ảnh.');
                 }
-            } else {
-                setErrorMessage('Vui lòng nhập API Key để ứng dụng đọc cấu trúc file mẫu.');
+            } catch (err: any) {
+                console.warn(err);
+                setErrorMessage('Lỗi khi đọc file mẫu: ' + (err.message || 'Không thể trích xuất'));
+            } finally {
+                setIsParsingTemplate(false);
             }
         }
     };
@@ -384,13 +384,43 @@ export const TeachingPlanTab: React.FC<TeachingPlanTabProps> = ({
         }));
     };
 
-    // Inline Editing
+    // Inline Editing (tự động tra cứu lại bài học từ PPCT nếu người dùng sửa cột MÔN hoặc LỚP)
     const handleUpdateRow = (id: string, field: keyof KhdhRow, value: any) => {
         if (!generatedPlan) return;
-        updateCurrentPlanAndSync(prev => ({
-            ...prev,
-            rows: prev.rows.map(r => r.id === id ? { ...r, [field]: value } : r)
-        }));
+        updateCurrentPlanAndSync(prev => {
+            const updatedRows = prev.rows.map(r => r.id === id ? { ...r, [field]: value } : r);
+            if ((field === 'subject' || field === 'className') && extractedPpcts.length > 0) {
+                try {
+                    const reMatched = matchAndBuildKhdhPlan(
+                        updatedRows.map(r => r.id === id ? { ...r, lessonName: '', notes: '' } : r),
+                        extractedPpcts,
+                        {
+                            targetWeek: prev.weekNumber,
+                            dateRange: prev.dateRange,
+                            schoolName: prev.schoolName,
+                            teacherName: prev.teacherName,
+                            academicYear: prev.academicYear,
+                            layoutOrientation: prev.layoutOrientation
+                        }
+                    );
+                    const matchedTarget = reMatched.rows.find((_, idx) => updatedRows[idx]?.id === id);
+                    if (matchedTarget && matchedTarget.lessonName) {
+                        return {
+                            ...prev,
+                            rows: updatedRows.map(r =>
+                                r.id === id
+                                    ? { ...r, lessonName: matchedTarget.lessonName, notes: matchedTarget.notes }
+                                    : r
+                            )
+                        };
+                    }
+                } catch {}
+            }
+            return {
+                ...prev,
+                rows: updatedRows
+            };
+        });
     };
 
     const handleDeleteRow = (id: string) => {

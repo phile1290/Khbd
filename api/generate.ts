@@ -8,14 +8,16 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { userPrompt, mainParts, referenceParts, systemInstruction, apiKey: clientApiKey } = req.body;
+    const { userPrompt, mainParts, referenceParts, systemInstruction } = req.body;
     
-    const finalApiKey = clientApiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
-    if (!finalApiKey) {
-      throw new Error("Vui lòng nhập Gemini API Key để tạo giáo án.");
-    }
-    
-    const ai = new GoogleGenAI({ apiKey: finalApiKey });
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
     
     const modelsToTry = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'];
     let delay = 3000;

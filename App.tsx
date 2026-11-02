@@ -14,44 +14,12 @@ import { pregenerateLessonImagesWithAI } from './utils/lessonImageGenerator';
 import LessonPreview from './components/LessonPreview';
 import TeachingPlanTab from './components/TeachingPlanTab';
 
-const getEnvGeminiKey = (): string => {
-    const procKey =
-        typeof process !== 'undefined' && process.env
-            ? process.env.GEMINI_API_KEY || process.env.API_KEY || ''
-            : '';
-    const viteKey =
-        typeof import.meta !== 'undefined' && (import.meta as any).env
-            ? (import.meta as any).env.VITE_GEMINI_API_KEY || (import.meta as any).env.VITE_API_KEY || ''
-            : '';
-    return (procKey || viteKey || '').trim();
-};
-
 const App: React.FC = () => {
     // Top-Level Main Tab: 'khbd' (Kế hoạch bài dạy) | 'khdh' (Kế hoạch dạy học)
     const [mainFeatureTab, setMainFeatureTab] = useState<'khbd' | 'khdh'>('khbd');
 
-    // API Key State
-    const [userApiKey, setUserApiKey] = useState<string>(() => {
-        if (typeof window !== 'undefined') {
-            return localStorage.getItem('geminiApiKey') || getEnvGeminiKey() || '';
-        }
-        return getEnvGeminiKey();
-    });
-
-    const getEffectiveApiKey = (): string => {
-        return (userApiKey.trim() || getEnvGeminiKey() || '').trim();
-    };
-
-    // Load API Key on mount
-    useEffect(() => {
-        const storedKey = localStorage.getItem('geminiApiKey');
-        if (storedKey) {
-            setUserApiKey(storedKey);
-        } else {
-            const envKey = getEnvGeminiKey();
-            if (envKey) setUserApiKey(envKey);
-        }
-    }, []);
+    const [userApiKey] = useState<string>('server-managed');
+    const getEffectiveApiKey = (): string => 'server-managed';
 
     // Active View Tab inside KHBD: 'list' (Danh sách các tuần tải về) | 'preview' (Xem chi tiết giáo án)
     const [activeTab, setActiveTab] = useState<'list' | 'preview'>('list');
@@ -175,22 +143,13 @@ const App: React.FC = () => {
                 }));
             }
             
-            const effectiveKey = getEffectiveApiKey();
-            if (effectiveKey) {
-                await parsePpct(file, effectiveKey);
-            } else {
-                setPpctError('Vui lòng nhập Gemini API Key phía trên rồi bấm "Phân tích file PPCT" để trích xuất danh sách bài học.');
-            }
+            await parsePpct(file);
             e.target.value = '';
         }
     };
 
-    const parsePpct = async (file: File, key?: string) => {
-        const effectiveKey = (key || getEffectiveApiKey()).trim();
-        if (!effectiveKey) {
-            setPpctError('Vui lòng nhập Gemini API Key phía trên để tự động phân tích file Phân phối chương trình.');
-            return;
-        }
+    const parsePpct = async (file: File, _key?: string) => {
+        const effectiveKey = getEffectiveApiKey();
         setParsingPpct(true);
         setPpctError('');
         setError('');
@@ -304,11 +263,6 @@ const App: React.FC = () => {
 
     // --- Validation Helper ---
     const validateBeforeRun = (): boolean => {
-        const effectiveKey = getEffectiveApiKey();
-        if (!effectiveKey) {
-            setError('Vui lòng nhập Gemini API Key ở mục Thiết lập phía trên để tiến hành soạn bài.');
-            return false;
-        }
         if (weekPlansRef.current.length === 0) {
             setError('Vui lòng tải lên file Phân phối chương trình để có danh sách bài dạy trước khi soạn.');
             return false;
@@ -330,10 +284,6 @@ const App: React.FC = () => {
         if (!item) return false;
 
         const effectiveKey = getEffectiveApiKey();
-        if (!effectiveKey) {
-            setError('Vui lòng nhập Gemini API Key để tiến hành soạn bài.');
-            return false;
-        }
 
         updateWeekPlansState(prev =>
             prev.map((w, i) => (i === idx ? { ...w, status: 'generating', error: undefined } : w))
@@ -676,25 +626,6 @@ const App: React.FC = () => {
                                 <h2 className="flex items-center gap-2 font-bold text-gray-800 text-sm border-b pb-2">
                                     <Settings size={18} className="text-teal-600" /> THIẾT LẬP VÀ PHÂN PHỐI CHƯƠNG TRÌNH
                                 </h2>
-
-                            {/* API Key */}
-                            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-lg">
-                                <label className="block text-xs font-bold text-blue-900 mb-1 flex items-center justify-between">
-                                    <span className="flex items-center gap-1"><Key size={14} /> Gemini API Key</span>
-                                    {userApiKey && <span className="text-green-600 font-normal flex items-center gap-1"><CheckCircle size={12} /> Đã lưu</span>}
-                                </label>
-                                <input 
-                                    type="password" 
-                                    placeholder="Nhập Gemini API Key của bạn..." 
-                                    className="w-full p-2 bg-white border border-blue-300 rounded-md text-xs outline-none focus:ring-1 focus:ring-blue-500 font-mono" 
-                                    value={userApiKey} 
-                                    onChange={(e) => {
-                                        setUserApiKey(e.target.value);
-                                        localStorage.setItem('geminiApiKey', e.target.value);
-                                    }} 
-                                />
-                                <p className="text-[11px] text-blue-700 mt-1.5 italic">API Key đã được lưu bảo mật trong trình duyệt của bạn.</p>
-                            </div>
 
                             {/* Môn học, Lớp, Thời lượng */}
                             <div className="grid grid-cols-3 gap-2">

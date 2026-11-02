@@ -7,7 +7,6 @@
  * - TUYỆT ĐỐI KHÔNG sử dụng kho hình vẽ sẵn cố định và KHÔNG hiển thị hộp văn bản thay cho hình ảnh.
  */
 
-import { GoogleGenAI } from "@google/genai";
 import { LessonPlanResponse } from "../types";
 
 // Bộ nhớ đệm lưu trữ hình ảnh PNG (Data URL) do AI sinh ra trong phiên làm việc
@@ -15,8 +14,28 @@ const aiGeneratedImageCache = new Map<string, string>();
 // Quản lý các tiến trình AI đang chạy để tránh gọi trùng lặp cùng một hình
 const inFlightAiTasks = new Map<string, Promise<string | null>>();
 
-let lastKnownApiKey: string = '';
 const unsupportedImageModels = new Set<string>();
+
+const callServerGenerate = async (payload: {
+    model: string;
+    contents: any;
+    config?: any;
+}): Promise<{ text: string; candidates: any[] }> => {
+    const res = await fetch("/api/gemini/generate-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const errMsg = data?.error?.message || data?.error || `HTTP ${res.status}`;
+        throw new Error(typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg));
+    }
+    return {
+        text: data?.text || "",
+        candidates: data?.candidates || []
+    };
+};
 
 type ImageUpdateListener = () => void;
 const imageUpdateListeners = new Set<ImageUpdateListener>();
@@ -129,34 +148,8 @@ const lookupFromAiCache = (keys: {
     );
 };
 
-const resolveActiveApiKey = (explicitKey?: string): string => {
-    const looksValid = (val?: string) => Boolean(val && val.trim().length > 12 && /^[\x20-\x7E]+$/.test(val.trim()));
-
-    if (looksValid(explicitKey)) {
-        lastKnownApiKey = explicitKey!.trim();
-        return lastKnownApiKey;
-    }
-    if (looksValid(lastKnownApiKey)) {
-        return lastKnownApiKey;
-    }
-    if (typeof window !== 'undefined') {
-        try {
-            const stored = localStorage.getItem('geminiApiKey');
-            if (looksValid(stored || '')) {
-                lastKnownApiKey = stored!.trim();
-                return lastKnownApiKey;
-            }
-        } catch {}
-    }
-    const envKey =
-        (typeof process !== 'undefined' && process.env && (process.env.GEMINI_API_KEY || process.env.API_KEY)) ||
-        ((import.meta as any).env && ((import.meta as any).env.VITE_GEMINI_API_KEY || (import.meta as any).env.VITE_API_KEY)) ||
-        '';
-    if (looksValid(envKey)) {
-        lastKnownApiKey = envKey.trim();
-        return lastKnownApiKey;
-    }
-    return '';
+const resolveActiveApiKey = (_explicitKey?: string): string => {
+    return 'server-managed';
 };
 
 /**
@@ -368,7 +361,7 @@ const extractFocalSubjectForImage = (
         return (input || '')
             .replace(/^[-–\*\s]*(GV|Giáo viên|HS|Học sinh|Thầy|Cô)\s*[:\-\–\.]?\s*/i, '')
             .replace(
-                /^(hình\s*ảnh\s*trực\s*quan\s*(chụp\s*thực\s*tế\s*hoặc\s*giao\s*diện\s*chi\s*tiết\s*có\s*nhãn\s*chú\s*thích\s*tiếng\s*việt\s*rõ\s*ràng\s*minh\s*họa\s*trực\s*tiếp\s*cho\s*nội\s*dung)?|cận\s*cảnh\s*trực\s*quan\s*đi\s*thẳng\s*vào\s*trọng\s*tâm\s*[^:]*|mô\s*tả\s*trực\s*quan\s*[^:]*)\s*[:\-–]?\s*/i,
+                /^(hình\s*ảnh\s*trực\s*quan\s*(chụp\s*thực\s*tế\s*hoặc\s*giao\s*diện\s*chi\s*tiết\s*có\s*nhãn\s*chú\s*thích\s*tiếng\s*việt\s*rõ\s*ràng\s*minh\s*họa\s*trực\s*tiếp\s*cho\s*nội\s*dung)?|cận\s*cảnh\s*trực\s*quan\s*(đi\s*thẳng\s*vào\s*trọng\s*tâm\s*[^:]*)?|mô\s*tả\s*trực\s*quan\s*[^:]*)\s*[:\-–]?\s*/i,
                 ''
             )
             .replace(
@@ -376,9 +369,14 @@ const extractFocalSubjectForImage = (
                 ''
             )
             .replace(
-                /\s*(để\s*học\s*sinh\s*ôn\s*lại\s*kiến\s*thức.*|để\s*cả\s*lớp\s*thảo\s*luận.*|và\s*thảo\s*luận\s*câu\s*hỏi.*|ở\s*tiết\s*\d+\s*để\s*học\s*sinh.*)$/i,
+                /\s*(để\s*học\s*sinh\s*ôn\s*lại\s*kiến\s*thức.*|để\s*cả\s*lớp\s*thảo\s*luận.*|và\s*thảo\s*luận\s*câu\s*hỏi.*|và\s*đặt\s*câu\s*hỏi.*|ở\s*tiết\s*\d+\s*để\s*học\s*sinh.*)$/i,
                 ''
             )
+            .replace(
+                /[,\.;\s]*(không\s*vẽ\s*cảnh\s*lớp\s*học[^,\.]*|không\s*lan\s*man[^,\.]*|không\s*có\s*chi\s*tiết\s*thừa[^,\.]*|trên\s*nền\s*trắng\s*sạch[^,\.]*|\(\s*bài\s*học\s*:[^)]*\))/gi,
+                ''
+            )
+            .replace(/[\.\:\;\,\s]+$/, '')
             .trim();
     };
 
@@ -395,8 +393,8 @@ const extractFocalSubjectForImage = (
 };
 
 /**
- * Kiểm tra xem nội dung hình ảnh có phải là bảng danh mục / lịch phát sóng nhiều dòng chữ tiếng Việt
- * (cần hiển thị chính xác từng khung giờ và tên chương trình bằng vector sắc nét) hay không.
+ * Kiểm tra xem nội dung hình ảnh có phải là bảng danh mục / lịch phát sóng / bảng tiêu chí / sơ đồ khối nhiều nhãn tiếng Việt
+ * (cần hiển thị chính xác từng khung giờ, cột bảng và nhãn chữ tiếng Việt bằng vector sắc nét) hay không.
  */
 const isScheduleOrTableFigure = (text: string): boolean => {
     const lower = (text || '').toLowerCase();
@@ -406,6 +404,10 @@ const isScheduleOrTableFigure = (text: string): boolean => {
         lower.includes('bảng vov') ||
         lower.includes('kênh vov1') ||
         lower.includes('kênh vov2') ||
+        lower.includes('phiếu đánh giá') ||
+        lower.includes('bảng tiêu chí') ||
+        lower.includes('bảng so sánh') ||
+        lower.includes('bảng phân loại') ||
         (lower.includes('bảng') && (lower.includes('cột') || lower.includes('khung giờ')))
     );
 };
@@ -414,7 +416,7 @@ const isScheduleOrTableFigure = (text: string): boolean => {
  * TRÍ TUỆ NHÂN TẠO CHUYỂN VĂN BẢN THÀNH HÌNH ẢNH MINH HỌA TRỰC QUAN ĐI ĐÚNG VÀO TRỌNG TÂM:
  * 1. Đối với các vật thể, thiết bị, mô hình, sản phẩm, bộ phận cấu tạo, mối quan hệ kỹ thuật:
  *    Ưu tiên gọi mô hình tạo ảnh trực quan của Gemini (`gemini-2.5-flash-image` / `gemini-2.0-flash-exp-image-generation`)
- *    để tạo hình ảnh cận cảnh, đi thẳng 100% vào đúng trọng tâm đối tượng, tuyệt đối không vẽ cảnh lớp học lan man.
+ *    để tạo hình ảnh cận cảnh, đi thẳng 100% vào đúng trọng tâm đối tượng, tuyệt đối không vẽ cảnh lớp học lan man và không có chi tiết thừa.
  * 2. Đối với bảng danh mục chương trình / lịch phát sóng tiếng Việt hoặc sơ đồ kỹ thuật có nhãn tiếng Việt:
  *    Sử dụng cụm 6 mô hình AI (`gemini-2.5-flash`, `gemini-3-flash-preview`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`...)
  *    kèm bộ tự động sửa lỗi HTML5 DOMParser -> XMLSerializer đảm bảo thành công 100%.
@@ -424,11 +426,8 @@ const generateSingleIllustrationWithAI = async (
     cleanDesc: string,
     lessonTitle: string,
     subjectContext: string,
-    apiKey: string
+    _apiKey?: string
 ): Promise<string | null> => {
-    const resolvedKey = resolveActiveApiKey(apiKey);
-    if (!resolvedKey) return null;
-
     const cacheKeys = buildSlotCacheKeys(lessonTitle, immediatePrecedingLine, cleanDesc);
     const cached = lookupFromAiCache(cacheKeys);
     if (cached) return cached;
@@ -438,13 +437,13 @@ const generateSingleIllustrationWithAI = async (
     }
 
     const taskPromise = (async (): Promise<string | null> => {
-        const ai = new GoogleGenAI({ apiKey: resolvedKey });
         const focalSubject = extractFocalSubjectForImage(immediatePrecedingLine, cleanDesc, lessonTitle);
-        const combinedContext = `${focalSubject} ${cleanDesc} ${immediatePrecedingLine}`;
+        const sanitizedCleanDesc = extractFocalSubjectForImage('', cleanDesc, lessonTitle);
+        const combinedContext = `${focalSubject} ${sanitizedCleanDesc} ${immediatePrecedingLine}`;
         const preferTableSvgFirst = isScheduleOrTableFigure(combinedContext);
 
-        // BƯỚC 1: Nếu không phải là bảng lịch phát sóng nhiều dòng chữ, ưu tiên dùng mô hình tạo ảnh trực tiếp (Gemini Image Generation)
-        // để tạo ra hình ảnh cận cảnh, đi đúng 100% vào trọng tâm, KHÔNG LAN MAN
+        // BƯỚC 1: Nếu không phải là bảng lịch phát sóng / bảng biểu nhiều dòng chữ, ưu tiên dùng mô hình tạo ảnh trực tiếp (Gemini Image Generation)
+        // để tạo ra hình ảnh cận cảnh, đi đúng 100% vào trọng tâm, KHÔNG LAN MAN, KHÔNG CÓ CHI TIẾT THỪA
         if (!preferTableSvgFirst) {
             const imageModels = [
                 'gemini-2.5-flash-image',
@@ -454,16 +453,16 @@ const generateSingleIllustrationWithAI = async (
             for (const imgModel of imageModels) {
                 for (let retry = 0; retry < 2; retry++) {
                     try {
-                        const visualPrompt = `Generate a direct, close-up, high-clarity educational textbook illustration (16:9 horizontal format, isolated on a pure solid white background #FFFFFF) that goes 100% straight to the core focal subject below:
-- CORE FOCAL SUBJECT TO DEPICT (100% FOCUS): "${focalSubject}"
-- Specific visual details: "${cleanDesc}"
-- Lesson context: "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
+                        const visualPrompt = `Create a clean, ultra-clear, textbook-grade close-up pedagogical illustration (16:9 horizontal aspect ratio, isolated on a pure solid white background #FFFFFF) depicting ONLY the exact focal subject below:
+- TARGET SUBJECT TO DRAW (100% FOCUS): "${focalSubject}"
+- Structural/visual details to show clearly: "${sanitizedCleanDesc}"
+- Subject & Lesson context: "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
 
-STRICT ANTI-RAMBLING & FOCUS RULES:
-1. GO STRAIGHT TO THE CORE FOCUS: Zoom in directly on the exact object, device, product, technical parts, or relationship specified in CORE FOCAL SUBJECT, centered and filling 75-85% of the frame.
-2. FORBID RAMBLING CLASSROOM SCENES: Do NOT draw a generic classroom, do NOT draw a teacher standing at a blackboard, do NOT draw students sitting at desks discussing in groups, and do NOT draw game show stages.
-3. NO EXTRANEOUS OBJECTS: Pure clean white background (#FFFFFF). Do NOT add unrelated background clutter, desk lamps, wall outlets, extra books, stationery, frames, or borders unless that specific item IS the core focal subject of the lesson.
-4. Do NOT render any text, letters, numbers, labels, captions, banners, or watermarks inside the image.`;
+STRICT PRECISION & ZERO-CLUTTER RULES:
+1. 100% DIRECT FOCUS: Draw ONLY the exact object, device, structural parts, technical relationship, or step-by-step action specified in TARGET SUBJECT, centered and occupying 75-85% of the canvas.
+2. ZERO EXTRANEOUS DETAILS: Pure solid white background (#FFFFFF). Do NOT include any background room, classroom walls, windows, curtains, desks, chairs, books, pens, lamps, plants, decorative frames, or unrelated props.
+3. NO CLASSROOM META-SCENES: Never draw a teacher lecturing or students sitting in groups unless the lesson itself is specifically about classroom posture.
+4. CRISP VISUAL CLARITY: Use clean lines, accurate proportions, distinct colors for key parts, and clear visual hierarchy suitable for a Vietnamese primary school textbook. Do NOT include watermarks, banners, or garbled text.`;
 
                         const config: any = {};
                         if (imgModel.includes('exp-image-generation')) {
@@ -471,7 +470,7 @@ STRICT ANTI-RAMBLING & FOCUS RULES:
                         }
 
                         const res = await Promise.race([
-                            ai.models.generateContent({
+                            callServerGenerate({
                                 model: imgModel,
                                 contents: { parts: [{ text: visualPrompt }] },
                                 config
@@ -509,25 +508,25 @@ STRICT ANTI-RAMBLING & FOCUS RULES:
         }
 
         // BƯỚC 2: Sử dụng AI Đồ họa Trực quan (SVG Vector -> PNG) với 6 cụm model độc lập và bộ sửa lỗi HTML5 DOMParser
-        // Đi thẳng 100% vào trọng tâm đối tượng trên nền trắng tinh khiết, CẤM HÌNH ẢNH LAN MAN
+        // Đi thẳng 100% vào trọng tâm đối tượng trên nền trắng tinh khiết, CẤM HÌNH ẢNH LAN MAN VÀ CẤM CHI TIẾT THỪA
         const svgIllustratorPrompt = `Bạn là Họa sĩ Minh họa Sách giáo khoa Tiểu học Việt Nam chuyên nghiệp.
-NHIỆM VỤ BẮT BUỘC: Hãy vẽ MỘT HÌNH ẢNH MINH HỌA ĐỒ HỌA TRỰC QUAN ĐI ĐÚNG VÀO TRỌNG TÂM 100%, KHÔNG LAN MAN, KHÔNG CÓ CHI TIẾT THỪA bằng mã SVG (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" width="760" height="420">...</svg>):
+NHIỆM VỤ BẮT BUỘC: Hãy vẽ MỘT HÌNH ẢNH MINH HỌA ĐỒ HỌA TRỰC QUAN ĐI ĐÚNG VÀO TRỌNG TÂM 100%, CHÍNH XÁC TUYỆT ĐỐI, KHÔNG CÓ CHI TIẾT THỪA bằng mã SVG (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" width="760" height="420">...</svg>):
 
-1. TRỌNG TÂM DUY NHẤT CẦN VẼ (ĐI THẲNG VÀO TRỌNG TÂM NÀY):
+1. ĐỐI TƯỢNG TRỌNG TÂM DUY NHẤT CẦN VẼ (TẬP TRUNG 100% VÀO ĐỐI TƯỢNG NÀY):
    "${focalSubject}"
-2. Chi tiết kênh hình cần thể hiện:
-   "${cleanDesc}"
+2. Chi tiết cấu tạo / bộ phận / nội dung cần thể hiện rõ:
+   "${sanitizedCleanDesc}"
 3. Môn học & Bài học hiện tại:
    "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
 
-NGUYÊN TẮC ĐỒ HỌA NGHIÊM NGẶT (ĐI ĐÚNG TRỌNG TÂM — CẤM TUYỆT ĐỐI HÌNH ẢNH LAN MAN):
-- Nền trắng sạch (#FFFFFF). Đi thẳng 100% vào cận cảnh đối tượng, thiết bị, cấu tạo bộ phận, sản phẩm mẫu, sơ đồ mối quan hệ kỹ thuật hoặc bảng biểu nêu tại mục (1) và (2). Đối tượng chính phải được vẽ rõ nét, kích thước lớn, cân đối ở chính giữa khung hình.
-- CẤM TUYỆT ĐỐI HÌNH ẢNH LAN MAN: KHÔNG vẽ cảnh giáo viên đứng bục giảng, KHÔNG vẽ cảnh học sinh ngồi bàn học thảo luận nhóm chung chung, KHÔNG vẽ bảng đen lớp học hay khung cảnh tổ chức trò chơi.
-- CẤM TUYỆT ĐỐI CHI TIẾT THỪA: KHÔNG vẽ thêm bất kỳ đồ vật phụ nào không được nhắc tới (không vẽ thêm đèn bàn, ổ cắm, sách vở thừa, cây cối hay đồ trang trí ngoài lề nếu bài học không yêu cầu).
+NGUYÊN TẮC ĐỒ HỌA NGHIÊM NGẶT (CHÍNH XÁC TUYỆT ĐỐI — KHÔNG CHI TIẾT THỪA — KHÔNG LAN MAN):
+- Nền trắng tinh khiết (#FFFFFF). Đi thẳng 100% vào cận cảnh đối tượng, thiết bị, cấu tạo bộ phận, giao diện phần mềm, sản phẩm mẫu, sơ đồ nguyên lý hoặc bảng biểu nêu tại mục (1) và (2). Đối tượng chính phải được vẽ rõ nét, tỷ lệ chuẩn xác, kích thước lớn (chiếm 75-85% diện tích khung hình), đặt cân đối ở chính giữa.
+- CẤM TUYỆT ĐỐI CHI TIẾT THỪA: KHÔNG vẽ bất kỳ đồ vật phụ nào ngoài đối tượng trọng tâm (không vẽ tường phòng, cửa sổ, rèm cửa, bàn ghế thừa, đèn bàn, sách vở phụ, lọ hoa, cây cảnh hay khung viền trang trí rườm rà).
+- CẤM TUYỆT ĐỐI HÌNH ẢNH LAN MAN: KHÔNG vẽ cảnh giáo viên đứng bục giảng, KHÔNG vẽ cảnh học sinh ngồi bàn học thảo luận nhóm chung chung, KHÔNG vẽ sân khấu trò chơi.
 - TUYỆT ĐỐI KHÔNG vẽ thanh tiêu đề/banner ở đầu ảnh (như "MINH HỌA TRỰC QUAN..."), KHÔNG ghi dòng trích dẫn ở cuối ảnh (như "Trích SGK..."), KHÔNG vẽ khung hộp văn bản chép lại lời giáo viên.
-- Nếu trọng tâm là vật thể/thiết bị/bộ phận cấu tạo/sản phẩm thực hành: Vẽ hình khối 2.5D/3D trực quan, chi tiết từng bộ phận bằng <path>, <rect>, <circle>, <ellipse>, <polygon>, <linearGradient> kèm đường chỉ dẫn gọn gàng nếu cần nêu tên bộ phận.
+- Nếu trọng tâm là vật thể/thiết bị/máy tính/đồ dùng công nghệ/sản phẩm thủ công: Vẽ hình khối 2.5D/3D trực quan, sắc nét từng bộ phận cấu tạo bằng <path>, <rect>, <circle>, <ellipse>, <polygon>, <linearGradient> kèm nhãn tên bộ phận tiếng Việt ngắn gọn, chuẩn xác, có mũi tên chỉ rõ từng bộ phận (không để chữ đè lên hình).
 - Nếu trọng tâm là mối quan hệ giữa đài phát thanh và máy thu thanh: Bên trái vẽ đài phát thanh và tháp ăng-ten phát sóng vô tuyến lan tỏa kèm mũi tên truyền sóng sang bên phải là chiếc máy thu thanh (radio) thu sóng và phát âm thanh ra loa.
-- Nếu trọng tâm là bảng danh mục chương trình VOV1 / VOV2: Vẽ trực tiếp bảng lịch phát sóng gọn gàng, rõ nét với các khung giờ và tên chương trình chuẩn SGK (khoanh viền đỏ các chương trình thiếu nhi nếu câu văn yêu cầu đối chiếu).
+- Nếu trọng tâm là bảng danh mục chương trình VOV1 / VOV2 hoặc bảng biểu SGK: Vẽ trực tiếp bảng lịch phát sóng gọn gàng, rõ nét với các khung giờ và tên chương trình chuẩn SGK (khoanh viền đỏ nổi bật các chương trình thiếu nhi nếu câu văn yêu cầu đối chiếu).
 - Chỉ trả về DUY NHẤT mã <svg ...>...</svg>, không có markdown hay lời giải thích.`;
 
         const svgModels = [
@@ -553,7 +552,7 @@ NGUYÊN TẮC ĐỒ HỌA NGHIÊM NGẶT (ĐI ĐÚNG TRỌNG TÂM — CẤM TUY�
                 }
 
                 const response = await Promise.race([
-                    ai.models.generateContent({
+                    callServerGenerate({
                         model: modelName,
                         contents: { parts: [{ text: svgIllustratorPrompt }] },
                         config
