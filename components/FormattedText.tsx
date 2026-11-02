@@ -119,7 +119,8 @@ const FormattedText: React.FC<Props> = ({
                             style={{
                                 ...baseStyle,
                                 fontStyle: 'italic',
-                                fontWeight: 'normal'
+                                fontWeight: 'normal',
+                                color: '#dc2626'
                             }}
                         >
                             {formattedIntegration}

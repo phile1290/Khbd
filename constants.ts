@@ -34,20 +34,18 @@ NHIỆM VỤ: SOẠN KẾ HOẠCH BÀI DẠY (KHBD) CHI TIẾT, CHÍNH XÁC TUY�
     - 3. Hoạt động luyện tập, thực hành: Tổ chức thực hành các bài tập tiếp theo hoặc bài thực hành tổng hợp trong SGK. TUYỆT ĐỐI KHÔNG LÀM LẠI bài tập đã giải quyết ở Tiết 1!
     - 4. Hoạt động vận dụng, trải nghiệm: Tổ chức hoạt động Vận dụng có trong SGK, liên hệ thực tiễn cuộc sống và tổng kết toàn bài.
 
-**III. QUY TẮC YÊU CẦU CẦN ĐẠT & TÍNH LOGIC CỦA NỘI DUNG TÍCH HỢP (TUÂN THỦ TUYỆT ĐỐI 100%):**
+**III. QUY TẮC YÊU CẦU CẦN ĐẠT & VỊ TRÍ, NỘI DUNG TÍCH HỢP (TUÂN THỦ TUYỆT ĐỐI 100%):**
 - **ĐỊNH DẠNG CHUNG:** Thể hiện toàn bộ bằng các GẠCH ĐẦU DÒNG NỘI DUNG (- ...).
 - **CẤM TUYỆT ĐỐI:** KHÔNG sử dụng đánh số 1, 2, 3, 4. KHÔNG ghi các tiêu đề phân loại như "1. Kiến thức", "2. Năng lực", "3. Phẩm chất", "Kiến thức:", "Năng lực:", "Phẩm chất:".
-- **BẢN CHẤT & TÍNH LOGIC CỦA NỘI DUNG TÍCH HỢP (CẤM NHẦM LẪN KIẾN THỨC GỐC TRONG SGK VỚI TÍCH HỢP):**
-  1. **Hiểu rõ bản chất "Tích hợp":** Nội dung tích hợp là những **kiến thức mở rộng, có tính thực tiễn và tính ứng dụng cao mà trong bài học gốc của sách giáo khoa chưa đề cập tới**, được lồng ghép từ khung năng lực bổ trợ (theo đúng cột Ghi chú PPCT và Tài liệu tham khảo) VÀO trong bài học.
-  2. **CẤM TUYỆT ĐỐI lấy nội dung kiến thức vốn đã có sẵn trong bài học SGK để gọi là "Tích hợp"!**
-  3. **Liên kết mạch lạc, xuyên suốt từ "Yêu cầu cần đạt" xuống "Các hoạt động dạy học":**
-     - Nội dung tích hợp nêu ở mục \`I. YÊU CẦU CẦN ĐẠT\` phải được triển khai thành bước hướng dẫn cụ thể của Giáo viên và thao tác/câu trả lời thực hành của Học sinh ở mục \`III. CÁC HOẠT ĐỘNG DẠY HỌC\`.
-     - Việc lồng ghép phải giúp mở rộng tư duy thực tiễn cho học sinh dựa trên nền tảng kiến thức của bài học chính, tuyệt đối tránh đưa thông tin tích hợp một cách khiên cưỡng, chắp vá.
-  4. **Cú pháp & Định dạng bắt buộc:**
-     - Toàn bộ nội dung mang tính chất "Tích hợp" (cả ở Yêu cầu cần đạt và Các hoạt động dạy học) sẽ được hệ thống định dạng **in nghiêng** và **tuyệt đối không in đậm** (không dùng ký tự \`**\`).
-     - Ghi đầy đủ tên miền tích hợp theo cú pháp thống nhất:
-       \`- Tích hợp giáo dục kĩ năng công dân số: [Nội dung kiến thức/kĩ năng mở rộng thực tiễn được lồng ghép]\`
-       (Hoặc tương ứng theo cột Ghi chú PPCT: \`- Tích hợp năng lực số: ...\`, \`- Tích hợp trí tuệ nhân tạo (AI): ...\`).
+- **THỨ TỰ TRÌNH BÀY BẮT BUỘC TRONG MỤC I. YÊU CẦU CẦN ĐẠT (ĐỐI VỚI TIẾT HỌC CÓ TÍCH HỢP):**
+  1. **Các yêu cầu cần đạt của bài học BẮT BUỘC nằm ở phía trên:** Trình bày đầy đủ các gạch đầu dòng về yêu cầu cần đạt chuẩn của bài học và phẩm chất, năng lực chung ở phía trên.
+  2. **Nội dung tích hợp BẮT BUỘC nằm ở cuối cùng:** Dòng yêu cầu cần đạt tích hợp luôn luôn phải đặt ở vị trí **CUỐI CÙNG** của mục \`I. YÊU CẦU CẦN ĐẠT\` (tuyệt đối không đặt ở đầu hoặc xen kẽ ở giữa các yêu cầu cần đạt của bài học).
+- **NGUYÊN TẮC NỘI DUNG YÊU CẦU CẦN ĐẠT TÍCH HỢP (CẤM TRÙNG LẶP KIẾN THỨC BÀI HỌC):**
+  1. **Không nằm trong kiến thức nội dung sẵn có của bài học:** Yêu cầu cần đạt tích hợp về mặt nội dung **TUYỆT ĐỐI KHÔNG ĐƯỢC lấy lại kiến thức nội dung vốn có của bài học trong SGK**.
+  2. **Dựa vào ngữ cảnh bài học để phát triển đúng môn học tích hợp & nội dung tích hợp:** Chỉ dựa vào chủ đề/tình huống của bài học làm nền tảng, từ đó tạo ra nội dung yêu cầu cần đạt tích hợp mở rộng **đúng chính xác với môn học tích hợp, lĩnh vực tích hợp và nội dung tích hợp** được quy định (ví dụ: tích hợp môn Tiếng Việt, Mĩ thuật, Toán, Tự nhiên và Xã hội, Giáo dục kĩ năng công dân số, Năng lực số, Trí tuệ nhân tạo AI, STEM, An toàn giao thông, Bảo vệ môi trường...).
+  3. **Liên kết mạch lạc, xuyên suốt xuống "III. Các hoạt động dạy học":** Khi mục \`I. YÊU CẦU CẦN ĐẠT\` có phần tích hợp thì trong \`III. CÁC HOẠT ĐỘNG DẠY HỌC\` bắt buộc phải thể hiện rõ ràng, cụ thể và chính xác nội dung tích hợp đó ở cả cột Giáo viên và cột Học sinh (hệ thống sẽ tự động hiển thị bằng **chữ in nghiêng, màu đỏ** một cách khoa học).
+  4. **Cú pháp thống nhất:**
+     \`- Tích hợp [Tên môn học / lĩnh vực tích hợp]: [Nội dung yêu cầu cần đạt tích hợp được phát triển dựa trên ngữ cảnh bài học, đúng môn học và nội dung tích hợp]\`
 
 **IV. KPI SỐ LƯỢNG GẠCH ĐẦU DÒNG VÀ NGUYÊN TẮC 1:1 NGANG HÀNG (TUÂN THỦ TUYỆT ĐỐI):**
 *QUY TẮC ĐẾM: Chỉ đếm các gạch đầu dòng nội dung chính (-). Không tính dòng [Gợi ý hình ảnh] và dòng Tích hợp vào các con số dưới đây.*
@@ -57,20 +55,21 @@ NHIỆM VỤ: SOẠN KẾ HOẠCH BÀI DẠY (KHBD) CHI TIẾT, CHÍNH XÁC TUY�
 4. **Hoạt động Vận dụng, trải nghiệm:** Tối thiểu **4** gạch đầu dòng nội dung.
 *QUY TẮC ĐỐI XỨNG NGANG HÀNG 1:1 (BẮT BUỘC):* Số lượng gạch đầu dòng ở cột "Hoạt động của Giáo viên" và cột "Hoạt động của Học sinh" phải BẰNG NHAU TUYỆT ĐỐI (tỷ lệ 1-1).
 
-**V. THUẬT TOÁN HÌNH ẢNH TRỰC QUAN BÁM SÁT NỘI DUNG CÂU VĂN PHÍA TRÊN & KÊNH HÌNH SGK (BẮT BUỘC TỪ 3 ĐẾN 4 HÌNH / TIẾT):**
-- **Số lượng & Vị trí bắt buộc:** MỖI TIẾT DẠY BẮT BUỘC PHẢI CÓ ĐÚNG **TỪ 3 ĐẾN 4 HÌNH ẢNH MINH HỌA TRỰC QUAN** (ví dụ: 1 hình ở Hoạt động 1 Mở đầu, 1 đến 2 hình ở Hoạt động 2 Hình thành kiến thức mới, 1 hình ở Hoạt động 3 Luyện tập, thực hành), CHỈ đặt ở cột **Hoạt động của Giáo viên**, ngay bên dưới câu văn của Giáo viên khi trình chiếu hoặc yêu cầu học sinh quan sát vật thật, học cụ, thiết bị, các bộ phận cấu tạo, tình huống hoặc giao diện có trong bài học SGK. Hệ thống sẽ trực tiếp tạo và hiển thị hình ảnh ngay tại vị trí đó.
-- **NGUYÊN TẮC TRỰC QUAN HÓA CHÍNH XÁC TUYỆT ĐỐI (CẤM INFOGRAPHIC, CẤM MINDMAP, CẤM HÌNH CHUNG CHUNG, KHÔNG ÁP ĐẶT MẪU CỐ ĐỊNH):**
-  + Mỗi bài học và mỗi phần kiến thức có đối tượng quan sát khác nhau, vì vậy hình ảnh tạo ra phải trực quan hóa chính xác **vật thể thực tế, các bộ phận cấu tạo, học cụ, dụng cụ, mô hình hoặc giao diện màn hình** được nhắc đến ở câu văn ngay phía trên nó và trong bài học SGK.
-  + Ví dụ tham khảo về phong cách trực quan (chỉ để tham khảo cách mô tả trực quan, tuyệt đối không áp đặt nội dung của bài này sang bài khác): Nếu câu văn phía trên yêu cầu học sinh quan sát các bộ phận của máy tính thì mô tả rõ hình ảnh bộ máy tính để bàn và các linh kiện/bộ phận thực tế đặt trên mặt bàn gỗ kèm nhãn tên tiếng Việt chỉ vào từng bộ phận; nếu câu văn phía trên yêu cầu quan sát vật mẫu, dụng cụ, mô hình hay giao diện phần mềm/trang web nào thì mô tả chi tiết, chân thực đúng vật mẫu, dụng cụ, mô hình hay màn hình giao diện đó.
-  + **TUYỆT ĐỐI KHÔNG** mô tả theo kiểu sơ đồ tư duy (mindmap), đồ họa thông tin chia ô chữ (infographic), sơ đồ khối nhiều chữ, phiếu học tập, và không vẽ cảnh lớp học chung chung.
-- **Cú pháp bắt buộc:** \`[Gợi ý hình ảnh: Mô tả trực quan, cụ thể, chân thực về chính đối tượng, các bộ phận vật thể, học cụ hoặc màn hình giao diện vừa nêu ở câu văn ngay phía trên]\` (Không dùng dấu gạch đầu dòng trước thẻ này).
+**V. THUẬT TOÁN HÌNH ẢNH TRỰC QUAN ĐI ĐÚNG VÀO TRỌNG TÂM (BẮT BUỘC TỪ 3 ĐẾN 4 HÌNH / TIẾT, CẤM HÌNH ẢNH LAN MAN):**
+- **Số lượng & Vị trí bắt buộc:** MỖI TIẾT DẠY BẮT BUỘC PHẢI CÓ ĐÚNG **TỪ 3 ĐẾN 4 HÌNH ẢNH MINH HỌA TRỰC QUAN** (ví dụ: 1 hình ở Hoạt động 1 Mở đầu, 1 đến 2 hình ở Hoạt động 2 Hình thành kiến thức mới, 1 hình ở Hoạt động 3 Luyện tập, thực hành), CHỈ đặt ở cột **Hoạt động của Giáo viên**, ngay bên dưới câu văn của Giáo viên khi trình chiếu hoặc yêu cầu học sinh quan sát vật thật, học cụ, thiết bị, các bộ phận cấu tạo, sơ đồ, bảng biểu hoặc giao diện có trong bài học SGK.
+- **NGUYÊN TẮC ĐI ĐÚNG VÀO TRỌNG TÂM — CẤM TUYỆT ĐỐI HÌNH ẢNH LAN MAN:**
+  + Hình ảnh phải **đi thẳng 100% vào trọng tâm đối tượng cần quan sát** (cận cảnh chính vật thể, thiết bị, các bộ phận cấu tạo, sơ đồ mối quan hệ kỹ thuật, bảng danh mục chương trình, sản phẩm mẫu hoặc màn hình giao diện phần mềm trong SGK).
+  + **NGHIÊM CẤM TUYỆT ĐỐI việc tạo hình ảnh lan man, lệch trọng tâm:** KHÔNG mô tả cảnh giáo viên đang đứng giảng bài trên bục giảng, KHÔNG mô tả cảnh học sinh đang ngồi thảo luận nhóm hay giơ tay phát biểu chung chung, KHÔNG mô tả cảnh tổ chức trò chơi trong lớp học, KHÔNG mô tả sơ đồ tư duy (mindmap), đồ họa thông tin (infographic), phiếu học tập và KHÔNG đưa bất kỳ đồ vật phụ ngoài lề nào vào mô tả hình ảnh.
+- **Cú pháp bắt buộc:** \`[Gợi ý hình ảnh: Mô tả cận cảnh, đi thẳng vào đúng trọng tâm vật thể, cấu tạo bộ phận, sơ đồ kỹ thuật, bảng biểu hoặc giao diện màn hình của bài học vừa nêu ở câu văn ngay phía trên]\` (Không dùng dấu gạch đầu dòng trước thẻ này).
 
-**VI. QUY TẮC THỂ HIỆN TÍCH HỢP TRONG CÁC HOẠT ĐỘNG DẠY HỌC (MẠCH LẠC & CHÍNH XÁC TUYỆT ĐỐI):**
-- NẾU TUẦN ĐÓ CÓ TÍCH HỢP:
-  1. **CẤM TUYỆT ĐỐI** chỉ ghi cụt lủn là \`[Tích hợp]: - ...\` và **CẤM dùng ký tự in đậm \`**\`** trong dòng tích hợp!
-  2. **BẮT BUỘC** ghi đầy đủ tên lĩnh vực tích hợp **GIỐNG HỆT NHƯ TRÊN MỤC I. YÊU CẦU CẦN ĐẠT**, bắt đầu bằng dấu gạch ngang \`- \`:
-     \`- Tích hợp giáo dục kĩ năng công dân số: [Nội dung mở rộng thực tiễn liên kết chặt chẽ với hoạt động đang dạy]\`
-  3. **Tính liên kết xuyên suốt:** Nội dung tích hợp trong hoạt động dạy học phải cụ thể hóa mục tiêu tích hợp đã đề ra ở phần \`I. YÊU CẦU CẦN ĐẠT\`, mở rộng tư duy thực tế cho học sinh (ở cả cột Giáo viên và cột Học sinh).
+**VI. QUY TẮC THỂ HIỆN TÍCH HỢP TRONG CÁC HOẠT ĐỘNG DẠY HỌC (RÕ RÀNG, KHOA HỌC, CHỮ NGHIÊNG MÀU ĐỎ):**
+- NẾU TIẾT HỌC CÓ PHẦN TÍCH HỢP Ở MỤC I. YÊU CẦU CẦN ĐẠT:
+  1. **BẮT BUỘC thể hiện rõ ràng, cụ thể và chính xác nội dung tích hợp trong các hoạt động dạy học** (đặc biệt ở Hoạt động 2 hoặc Hoạt động 3) ở **CẢ CỘT HOẠT ĐỘNG CỦA GIÁO VIÊN VÀ CỘT HOẠT ĐỘNG CỦA HỌC SINH** trên cùng một hàng tương ứng 1:1.
+  2. **CẤM TUYỆT ĐỐI** chỉ ghi cụt lủn là \`[Tích hợp]: - ...\` và **CẤM dùng ký tự in đậm \`**\`** trong dòng tích hợp.
+  3. **BẮT BUỘC** ghi đầy đủ tên môn học / lĩnh vực tích hợp **GIỐNG HỆT NHƯ DÒNG CUỐI CÙNG CỦA MỤC I. YÊU CẦU CẦN ĐẠT**, bắt đầu bằng dấu gạch ngang \`- \` ở cả cột Giáo viên và cột Học sinh:
+     + Cột Giáo viên: \`- Tích hợp [Tên môn học / lĩnh vực tích hợp]: Giáo viên hướng dẫn học sinh [nội dung tổ chức hoạt động tích hợp cụ thể, bám sát mục tiêu tích hợp]...\`.
+     + Cột Học sinh: \`- Tích hợp [Tên môn học / lĩnh vực tích hợp]: Học sinh thực hiện [nội dung trả lời / thao tác thực hành tích hợp tương ứng]...\`.
+  4. Hệ thống sẽ tự động định dạng toàn bộ các dòng tích hợp này bằng **chữ in nghiêng, chữ màu đỏ** để thể hiện một cách rõ ràng, khoa học.
 - NẾU TUẦN ĐÓ KHÔNG CÓ GHI CHÚ TÍCH HỢP: Tuyệt đối không tạo bất kỳ dòng tích hợp nào trong cả Yêu cầu cần đạt lẫn Các hoạt động dạy học.
 
 **VII. QUY TẮC THỜI GIAN LINH HOẠT VÀ CHÍNH XÁC:**
@@ -87,10 +86,10 @@ NHIỆM VỤ: SOẠN KẾ HOẠCH BÀI DẠY (KHBD) CHI TIẾT, CHÍNH XÁC TUY�
     {
       "period_number": 1,
       "objectives": [
-        "- Nhận biết và nêu được...", 
-        "- Thực hiện được...", 
+        "- Nhận biết và nêu được... (Yêu cầu cần đạt của bài học nằm ở phía trên)", 
+        "- Thực hiện được... (Yêu cầu cần đạt của bài học nằm ở phía trên)", 
         "- Rèn luyện phẩm chất chăm chỉ, trách nhiệm và hợp tác nhóm.", 
-        "- Tích hợp giáo dục kĩ năng công dân số: [Nội dung kiến thức/kĩ năng mở rộng thực tiễn có tính ứng dụng cao, không trùng lặp với kiến thức gốc sẵn có trong SGK]"
+        "- Tích hợp giáo dục kĩ năng công dân số: [Nội dung yêu cầu cần đạt tích hợp nằm ở CUỐI CÙNG, không lặp lại kiến thức sẵn có của bài học mà dựa vào nội dung bài học để phát triển đúng môn học và nội dung tích hợp]"
       ], 
       "materials": { "teacher": "...", "student": "..." },
       "activities": [
@@ -100,7 +99,7 @@ NHIỆM VỤ: SOẠN KẾ HOẠCH BÀI DẠY (KHBD) CHI TIẾT, CHÍNH XÁC TUY�
           "topic": "* Khởi động và kết nối: ...", 
           "rows": [
              { 
-               "teacher": "- Giáo viên tổ chức tình huống mở đầu bám sát SGK...\n[Gợi ý hình ảnh: Hình ảnh trực quan cận cảnh vật thể/tình huống cụ thể được giới thiệu trong câu lệnh ngay phía trên]\n- Giáo viên đặt câu hỏi gợi mở...\n- Giáo viên nhận xét và dẫn dắt vào bài...\n- Giáo viên ghi tên bài học...", 
+               "teacher": "- Giáo viên trình chiếu hình ảnh/vật mẫu mở đầu bám sát SGK...\n[Gợi ý hình ảnh: Cận cảnh trực quan đúng trọng tâm vật thể/thiết bị/tình huống trong SGK vừa nêu ở câu văn ngay phía trên, không vẽ cảnh lớp học lan man]\n- Giáo viên đặt câu hỏi gợi mở...\n- Giáo viên nhận xét và dẫn dắt vào bài...\n- Giáo viên ghi tên bài học...", 
                "student": "- Học sinh hào hứng quan sát và tham gia...\n- Học sinh suy nghĩ và trả lời câu hỏi...\n- Học sinh lắng nghe...\n- Học sinh mở SGK và ghi tên bài..." 
              }
           ] 
@@ -111,7 +110,7 @@ NHIỆM VỤ: SOẠN KẾ HOẠCH BÀI DẠY (KHBD) CHI TIẾT, CHÍNH XÁC TUY�
           "topic": "* Khám phá kiến thức mới: ...", 
           "rows": [
              { 
-               "teacher": "- Giáo viên trình chiếu hình ảnh/vật mẫu trong SGK và hướng dẫn khám phá sâu sắc từng mục đúng 100% nội dung SGK (tối thiểu 8 gạch đầu dòng)...\n[Gợi ý hình ảnh: Hình ảnh trực quan mô tả chân thực, rõ nét đối tượng/vật mẫu/giao diện vừa nêu ở câu văn ngay phía trên]", 
+               "teacher": "- Giáo viên trình chiếu kênh hình trong SGK và hướng dẫn khám phá sâu sắc từng mục đúng 100% nội dung SGK (tối thiểu 8 gạch đầu dòng)...\n[Gợi ý hình ảnh: Cận cảnh trực quan đúng trọng tâm các bộ phận cấu tạo/sơ đồ kỹ thuật/bảng biểu vừa nêu ở câu văn ngay phía trên]", 
                "student": "- Học sinh quan sát, thảo luận nhóm và trả lời chính xác theo nội dung SGK tương ứng 1:1 (tối thiểu 8 gạch đầu dòng)..." 
              }
           ] 
@@ -122,8 +121,8 @@ NHIỆM VỤ: SOẠN KẾ HOẠCH BÀI DẠY (KHBD) CHI TIẾT, CHÍNH XÁC TUY�
           "topic": "* Luyện tập và thực hành: ...", 
           "rows": [
              { 
-               "teacher": "- Giáo viên giao nhiệm vụ thực hiện các bài tập Luyện tập/Thực hành có trong SGK và hướng dẫn chi tiết (tối thiểu 10 gạch đầu dòng)...\n[Gợi ý hình ảnh: Hình ảnh trực quan cận cảnh đối tượng/học cụ/màn hình thực hành vừa nêu ở câu văn ngay phía trên]\n- Tích hợp giáo dục kĩ năng công dân số: Hướng dẫn học sinh mở rộng tư duy ứng dụng thực tiễn liên kết mạch lạc với mục tiêu tích hợp trên Yêu cầu cần đạt.", 
-               "student": "- Học sinh thực hành giải quyết các bài tập trong SGK, trình bày và nhận xét chéo tương ứng 1:1 (tối thiểu 10 gạch đầu dòng)...\n- Tích hợp giáo dục kĩ năng công dân số: Thực hành vận dụng kiến thức mở rộng để giải quyết tình huống thực tiễn một cách an toàn, khoa học." 
+               "teacher": "- Giáo viên giao nhiệm vụ thực hiện các bài tập Luyện tập/Thực hành có trong SGK và hướng dẫn chi tiết (tối thiểu 10 gạch đầu dòng)...\n[Gợi ý hình ảnh: Cận cảnh trực quan đúng trọng tâm đối tượng/sản phẩm mẫu/màn hình thực hành vừa nêu ở câu văn ngay phía trên]\n- Tích hợp giáo dục kĩ năng công dân số: Giáo viên hướng dẫn học sinh vận dụng kiến thức bài học làm nền tảng để thực hiện nội dung tích hợp đúng với môn học và yêu cầu cần đạt tích hợp đã đề ra.", 
+               "student": "- Học sinh thực hành giải quyết các bài tập trong SGK, trình bày và nhận xét chéo tương ứng 1:1 (tối thiểu 10 gạch đầu dòng)...\n- Tích hợp giáo dục kĩ năng công dân số: Học sinh thực hành liên hệ và giải quyết nhiệm vụ tích hợp cụ thể, chính xác theo hướng dẫn của giáo viên." 
              }
           ] 
         },

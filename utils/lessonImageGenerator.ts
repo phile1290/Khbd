@@ -356,6 +356,45 @@ const extractImmediateTeacherSentence = (precedingContext: string): string => {
 };
 
 /**
+ * Lọc bỏ hoàn toàn các cụm từ điều hành lớp học lan man (như "tổ chức trò chơi...", "chia lớp thành các nhóm...",
+ * "yêu cầu học sinh thảo luận...") để trích xuất ĐÚNG 100% TRỌNG TÂM ĐỐI TƯỢNG / VẬT THỂ / KÊNH HÌNH CẦN VẼ.
+ */
+const extractFocalSubjectForImage = (
+    immediatePrecedingLine: string,
+    cleanDesc: string,
+    lessonTitle: string
+): string => {
+    const stripWrapper = (input: string): string => {
+        return (input || '')
+            .replace(/^[-–\*\s]*(GV|Giáo viên|HS|Học sinh|Thầy|Cô)\s*[:\-\–\.]?\s*/i, '')
+            .replace(
+                /^(hình\s*ảnh\s*trực\s*quan\s*(chụp\s*thực\s*tế\s*hoặc\s*giao\s*diện\s*chi\s*tiết\s*có\s*nhãn\s*chú\s*thích\s*tiếng\s*việt\s*rõ\s*ràng\s*minh\s*họa\s*trực\s*tiếp\s*cho\s*nội\s*dung)?|cận\s*cảnh\s*trực\s*quan\s*đi\s*thẳng\s*vào\s*trọng\s*tâm\s*[^:]*|mô\s*tả\s*trực\s*quan\s*[^:]*)\s*[:\-–]?\s*/i,
+                ''
+            )
+            .replace(
+                /^(tổ\s*chức\s*trò\s*chơi\s*['"][^'"]+['"]\s*(bằng\s*cách\s*)?|chia\s*lớp\s*thành\s*[^,]+,\s*(giao\s*nhiệm\s*vụ|yêu\s*cầu)\s*(cho\s*các\s*nhóm|học\s*sinh)?\s*|quan\s*sát,\s*đi\s*đến\s*từng\s*nhóm\s*hướng\s*dẫn\s*học\s*sinh\s*(chú\s*ý\s*)?(đối\s*chiếu|quan\s*sát)?\s*|yêu\s*cầu\s*(học\s*sinh|hs|các\s*nhóm)\s*(mở\s*sgk\s*(trang\s*\d+)?\s*,?\s*)?(quan\s*sát|đọc\s*thầm|tìm\s*hiểu|nhắc\s*lại|thảo\s*luận)?\s*|trình\s*chiếu\s*(lại\s*)?(hình\s*ảnh|kênh\s*hình|sơ\s*đồ|mô\s*hình|vật\s*mẫu)?\s*|giới\s*thiệu\s*|đưa\s*ra\s*|treo\s*|cho\s*(học\s*sinh|hs)\s*(xem|quan\s*sát)\s*)/i,
+                ''
+            )
+            .replace(
+                /\s*(để\s*học\s*sinh\s*ôn\s*lại\s*kiến\s*thức.*|để\s*cả\s*lớp\s*thảo\s*luận.*|và\s*thảo\s*luận\s*câu\s*hỏi.*|ở\s*tiết\s*\d+\s*để\s*học\s*sinh.*)$/i,
+                ''
+            )
+            .trim();
+    };
+
+    const focalDesc = stripWrapper(cleanDesc);
+    const focalPreceding = stripWrapper(immediatePrecedingLine);
+
+    if (focalDesc && focalDesc.length >= 8) {
+        return focalDesc;
+    }
+    if (focalPreceding && focalPreceding.length >= 8) {
+        return focalPreceding;
+    }
+    return focalDesc || focalPreceding || `Đối tượng trọng tâm của ${lessonTitle}`;
+};
+
+/**
  * Kiểm tra xem nội dung hình ảnh có phải là bảng danh mục / lịch phát sóng nhiều dòng chữ tiếng Việt
  * (cần hiển thị chính xác từng khung giờ và tên chương trình bằng vector sắc nét) hay không.
  */
@@ -372,11 +411,11 @@ const isScheduleOrTableFigure = (text: string): boolean => {
 };
 
 /**
- * TRÍ TUỆ NHÂN TẠO CHUYỂN VĂN BẢN THÀNH HÌNH ẢNH MINH HỌA TRỰC QUAN:
- * 1. Đối với các vật thể, thiết bị, mô hình, tình huống, con người, mối quan hệ kỹ thuật:
+ * TRÍ TUỆ NHÂN TẠO CHUYỂN VĂN BẢN THÀNH HÌNH ẢNH MINH HỌA TRỰC QUAN ĐI ĐÚNG VÀO TRỌNG TÂM:
+ * 1. Đối với các vật thể, thiết bị, mô hình, sản phẩm, bộ phận cấu tạo, mối quan hệ kỹ thuật:
  *    Ưu tiên gọi mô hình tạo ảnh trực quan của Gemini (`gemini-2.5-flash-image` / `gemini-2.0-flash-exp-image-generation`)
- *    để tạo hình ảnh thực tế, sắc nét, sống động như hình chụp/minh họa 3D trong SGK.
- * 2. Đối với bảng danh mục chương trình / lịch phát sóng tiếng Việt hoặc khi cần đồ họa vector chi tiết có nhãn chữ tiếng Việt:
+ *    để tạo hình ảnh cận cảnh, đi thẳng 100% vào đúng trọng tâm đối tượng, tuyệt đối không vẽ cảnh lớp học lan man.
+ * 2. Đối với bảng danh mục chương trình / lịch phát sóng tiếng Việt hoặc sơ đồ kỹ thuật có nhãn tiếng Việt:
  *    Sử dụng cụm 6 mô hình AI (`gemini-2.5-flash`, `gemini-3-flash-preview`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`...)
  *    kèm bộ tự động sửa lỗi HTML5 DOMParser -> XMLSerializer đảm bảo thành công 100%.
  */
@@ -400,11 +439,12 @@ const generateSingleIllustrationWithAI = async (
 
     const taskPromise = (async (): Promise<string | null> => {
         const ai = new GoogleGenAI({ apiKey: resolvedKey });
-        const combinedContext = `${immediatePrecedingLine} ${cleanDesc}`;
+        const focalSubject = extractFocalSubjectForImage(immediatePrecedingLine, cleanDesc, lessonTitle);
+        const combinedContext = `${focalSubject} ${cleanDesc} ${immediatePrecedingLine}`;
         const preferTableSvgFirst = isScheduleOrTableFigure(combinedContext);
 
         // BƯỚC 1: Nếu không phải là bảng lịch phát sóng nhiều dòng chữ, ưu tiên dùng mô hình tạo ảnh trực tiếp (Gemini Image Generation)
-        // để tạo ra hình ảnh trực quan chân thực, sắc nét, KHÔNG CÓ CHI TIẾT THỪA
+        // để tạo ra hình ảnh cận cảnh, đi đúng 100% vào trọng tâm, KHÔNG LAN MAN
         if (!preferTableSvgFirst) {
             const imageModels = [
                 'gemini-2.5-flash-image',
@@ -414,15 +454,16 @@ const generateSingleIllustrationWithAI = async (
             for (const imgModel of imageModels) {
                 for (let retry = 0; retry < 2; retry++) {
                     try {
-                        const visualPrompt = `Generate a clean, accurate, high-clarity educational textbook illustration (16:9 horizontal format, isolated on a pure solid white background #FFFFFF) that depicts ONLY the exact subject described below:
-- Teacher's instruction sentence immediately above: "${immediatePrecedingLine || cleanDesc}"
-- Exact subject/object/scene to depict: "${cleanDesc}"
-- Lesson topic: "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
+                        const visualPrompt = `Generate a direct, close-up, high-clarity educational textbook illustration (16:9 horizontal format, isolated on a pure solid white background #FFFFFF) that goes 100% straight to the core focal subject below:
+- CORE FOCAL SUBJECT TO DEPICT (100% FOCUS): "${focalSubject}"
+- Specific visual details: "${cleanDesc}"
+- Lesson context: "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
 
-STRICT VISUAL RULES (NO EXTRANEOUS DETAILS):
-1. Depict ONLY the main subject, object, device, product, or specific action stated above.
-2. Pure clean white background (#FFFFFF). Do NOT add any unrelated background objects, desk clutter, lamps, wall outlets, extra books, stationery, frames, or borders.
-3. Do NOT render any text, letters, numbers, labels, captions, banners, or watermarks inside the image.`;
+STRICT ANTI-RAMBLING & FOCUS RULES:
+1. GO STRAIGHT TO THE CORE FOCUS: Zoom in directly on the exact object, device, product, technical parts, or relationship specified in CORE FOCAL SUBJECT, centered and filling 75-85% of the frame.
+2. FORBID RAMBLING CLASSROOM SCENES: Do NOT draw a generic classroom, do NOT draw a teacher standing at a blackboard, do NOT draw students sitting at desks discussing in groups, and do NOT draw game show stages.
+3. NO EXTRANEOUS OBJECTS: Pure clean white background (#FFFFFF). Do NOT add unrelated background clutter, desk lamps, wall outlets, extra books, stationery, frames, or borders unless that specific item IS the core focal subject of the lesson.
+4. Do NOT render any text, letters, numbers, labels, captions, banners, or watermarks inside the image.`;
 
                         const config: any = {};
                         if (imgModel.includes('exp-image-generation')) {
@@ -468,23 +509,25 @@ STRICT VISUAL RULES (NO EXTRANEOUS DETAILS):
         }
 
         // BƯỚC 2: Sử dụng AI Đồ họa Trực quan (SVG Vector -> PNG) với 6 cụm model độc lập và bộ sửa lỗi HTML5 DOMParser
-        // Vẽ chính xác tuyệt đối đối tượng được nêu ở câu văn ngay phía trên trên nền trắng tinh khiết, KHÔNG CÓ CHI TIẾT THỪA
+        // Đi thẳng 100% vào trọng tâm đối tượng trên nền trắng tinh khiết, CẤM HÌNH ẢNH LAN MAN
         const svgIllustratorPrompt = `Bạn là Họa sĩ Minh họa Sách giáo khoa Tiểu học Việt Nam chuyên nghiệp.
-NHIỆM VỤ BẮT BUỘC: Hãy vẽ MỘT HÌNH ẢNH MINH HỌA ĐỒ HỌA TRỰC QUAN, CHÍNH XÁC TUYỆT ĐỐI 100%, KHÔNG CÓ CHI TIẾT THỪA bằng mã SVG (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" width="760" height="420">...</svg>) thể hiện đúng nội dung câu văn ngay phía trên:
+NHIỆM VỤ BẮT BUỘC: Hãy vẽ MỘT HÌNH ẢNH MINH HỌA ĐỒ HỌA TRỰC QUAN ĐI ĐÚNG VÀO TRỌNG TÂM 100%, KHÔNG LAN MAN, KHÔNG CÓ CHI TIẾT THỪA bằng mã SVG (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" width="760" height="420">...</svg>):
 
-1. Môn học & Bài học hiện tại: "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
-2. Câu văn hoạt động của Giáo viên ngay phía trên hình ảnh:
-   "${immediatePrecedingLine || cleanDesc}"
-3. Đối tượng / kênh hình cụ thể cần vẽ:
+1. TRỌNG TÂM DUY NHẤT CẦN VẼ (ĐI THẲNG VÀO TRỌNG TÂM NÀY):
+   "${focalSubject}"
+2. Chi tiết kênh hình cần thể hiện:
    "${cleanDesc}"
+3. Môn học & Bài học hiện tại:
+   "${subjectContext ? `${subjectContext} - ` : ''}${lessonTitle}"
 
-NGUYÊN TẮC ĐỒ HỌA NGHIÊM NGẶT (CẤM TUYỆT ĐỐI CHI TIẾT THỪA):
-- Nền trắng sạch (#FFFFFF). CHỈ VẼ ĐÚNG DUY NHẤT đối tượng, thiết bị, sản phẩm, sơ đồ mối quan hệ hoặc bảng biểu được nhắc đến trong mục (2) và (3) của bài học "${lessonTitle}".
-- TUYỆT ĐỐI KHÔNG vẽ thêm bất kỳ đồ vật phụ nào không được nhắc tới (không vẽ thêm đèn bàn, ổ cắm, sách vở thừa, cây cối hay đồ trang trí ngoài lề).
-- TUYỆT ĐỐI KHÔNG vẽ thanh tiêu đề/banner ở đầu ảnh (như "MINH HỌA TRỰC QUAN..."), KHÔNG ghi dòng trích dẫn ở cuối ảnh (như "Trích SGK..."), KHÔNG vẽ icon trang trí ở góc bảng, KHÔNG vẽ khung hộp văn bản chép lại đề bài.
-- Nếu nội dung là vật thể/thiết bị/sản phẩm thực hành: Vẽ hình khối 2.5D/3D trực quan, cân đối ở chính giữa khung hình bằng <path>, <rect>, <circle>, <ellipse>, <polygon>, <linearGradient> rõ nét.
-- Nếu nội dung là mối quan hệ giữa đài phát thanh và máy thu thanh: Bên trái vẽ đài phát thanh và tháp ăng-ten phát sóng vô tuyến lan tỏa kèm mũi tên truyền sóng sang bên phải là chiếc máy thu thanh (radio) thu sóng và phát âm thanh ra loa.
-- Nếu nội dung là bảng danh mục chương trình VOV1 / VOV2: Chỉ vẽ bảng lịch phát sóng gọn gàng, rõ nét với các khung giờ và tên chương trình chuẩn SGK (khoanh viền đỏ các chương trình thiếu nhi nếu câu văn phía trên yêu cầu đối chiếu).
+NGUYÊN TẮC ĐỒ HỌA NGHIÊM NGẶT (ĐI ĐÚNG TRỌNG TÂM — CẤM TUYỆT ĐỐI HÌNH ẢNH LAN MAN):
+- Nền trắng sạch (#FFFFFF). Đi thẳng 100% vào cận cảnh đối tượng, thiết bị, cấu tạo bộ phận, sản phẩm mẫu, sơ đồ mối quan hệ kỹ thuật hoặc bảng biểu nêu tại mục (1) và (2). Đối tượng chính phải được vẽ rõ nét, kích thước lớn, cân đối ở chính giữa khung hình.
+- CẤM TUYỆT ĐỐI HÌNH ẢNH LAN MAN: KHÔNG vẽ cảnh giáo viên đứng bục giảng, KHÔNG vẽ cảnh học sinh ngồi bàn học thảo luận nhóm chung chung, KHÔNG vẽ bảng đen lớp học hay khung cảnh tổ chức trò chơi.
+- CẤM TUYỆT ĐỐI CHI TIẾT THỪA: KHÔNG vẽ thêm bất kỳ đồ vật phụ nào không được nhắc tới (không vẽ thêm đèn bàn, ổ cắm, sách vở thừa, cây cối hay đồ trang trí ngoài lề nếu bài học không yêu cầu).
+- TUYỆT ĐỐI KHÔNG vẽ thanh tiêu đề/banner ở đầu ảnh (như "MINH HỌA TRỰC QUAN..."), KHÔNG ghi dòng trích dẫn ở cuối ảnh (như "Trích SGK..."), KHÔNG vẽ khung hộp văn bản chép lại lời giáo viên.
+- Nếu trọng tâm là vật thể/thiết bị/bộ phận cấu tạo/sản phẩm thực hành: Vẽ hình khối 2.5D/3D trực quan, chi tiết từng bộ phận bằng <path>, <rect>, <circle>, <ellipse>, <polygon>, <linearGradient> kèm đường chỉ dẫn gọn gàng nếu cần nêu tên bộ phận.
+- Nếu trọng tâm là mối quan hệ giữa đài phát thanh và máy thu thanh: Bên trái vẽ đài phát thanh và tháp ăng-ten phát sóng vô tuyến lan tỏa kèm mũi tên truyền sóng sang bên phải là chiếc máy thu thanh (radio) thu sóng và phát âm thanh ra loa.
+- Nếu trọng tâm là bảng danh mục chương trình VOV1 / VOV2: Vẽ trực tiếp bảng lịch phát sóng gọn gàng, rõ nét với các khung giờ và tên chương trình chuẩn SGK (khoanh viền đỏ các chương trình thiếu nhi nếu câu văn yêu cầu đối chiếu).
 - Chỉ trả về DUY NHẤT mã <svg ...>...</svg>, không có markdown hay lời giải thích.`;
 
         const svgModels = [

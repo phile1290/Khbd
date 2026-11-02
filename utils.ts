@@ -379,26 +379,43 @@ export const ensureFourActivitiesInAllPeriods = (
             return count;
         };
 
+        const isProceduralClassroomLine = (line: string): boolean => {
+            return /^(-\s*)?(giáo\s*viên|gv)?\s*(mời\s+đại\s+diện|yêu\s+cầu\s+các\s+nhóm\s+nhận\s+xét|nhận\s+xét\s+chung|tuyên\s+dương|khen\s+ngợi|dặn\s+dò|ghi\s+tên\s+bài|chia\s+lớp\s+thành|tổ\s+chức\s+báo\s+cáo)/i.test(
+                line.trim()
+            );
+        };
+
+        const stripClassroomManagementWrapper = (rawLine: string): string => {
+            return rawLine
+                .replace(/^[-–\*\s]+/, '')
+                .replace(/^(Giáo\s*viên|GV)\s*[:\-\–]?\s*/i, '')
+                .replace(
+                    /^(tổ\s*chức\s*trò\s*chơi\s*['"][^'"]+['"]\s*(bằng\s*cách|,\s*yêu\s*cầu\s*học\s*sinh)?|chia\s*lớp\s*thành\s*[^,]+,\s*(giao\s*nhiệm\s*vụ|yêu\s*cầu)\s*(cho\s*các\s*nhóm|học\s*sinh)?|yêu\s*cầu\s*(học\s*sinh|hs|các\s*nhóm)\s*(mở\s*sgk\s*trang\s*\d+\s*,?\s*)?(quan\s*sát|đọc\s*thầm|tìm\s*hiểu|thảo\s*luận)?|trình\s*chiếu\s*(lại\s*)?(hình\s*ảnh|kênh\s*hình|sơ\s*đồ|mô\s*hình|vật\s*mẫu)?|hướng\s*dẫn\s*(học\s*sinh|hs)\s*(chú\s*ý\s*)?(quan\s*sát|đối\s*chiếu)?)\s*/i,
+                    ''
+                )
+                .replace(/\s*(để\s*học\s*sinh\s*ôn\s*lại\s*kiến\s*thức|để\s*cả\s*lớp\s*thảo\s*luận|và\s*thảo\s*luận\s*nhóm.*)$/i, '')
+                .replace(/[\.\:\;]+$/, '')
+                .trim();
+        };
+
         const buildContextualHintFromTeacherLine = (teacherText: string, actName: string): string => {
             const nonHintLines = splitLinesWithHints(teacherText).filter(
                 l => !isImageHintLine(l) && !isActivityIntegrationLine(l) && !l.startsWith('*')
             );
+            const nonProceduralLines = nonHintLines.filter(l => !isProceduralClassroomLine(l));
+            const candidatePool = nonProceduralLines.length > 0 ? nonProceduralLines : nonHintLines;
             const anchorLine =
-                nonHintLines.find(l =>
-                    /quan sát|trình chiếu|chiếu|hình|sơ đồ|mô hình|bộ phận|cấu tạo|màn hình|giao diện|ví dụ|tình huống|thực hành|bài tập|thao tác|bảng|phiếu/i.test(
+                candidatePool.find(l =>
+                    /hình\s*\d+|sơ\s*đồ|mô\s*hình|bộ\s*phận|cấu\s*tạo|màn\s*hình|giao\s*diện|bảng|danh\s*mục|sản\s*phẩm|vật\s*liệu|dụng\s*cụ|mối\s*quan\s*hệ|bước\s*\d+|quan\s*sát|trình\s*chiếu/i.test(
                         l
                     )
                 ) ||
-                nonHintLines[0] ||
-                `Nội dung trọng tâm thuộc ${actName} của bài ${baseTitle}`;
+                candidatePool[0] ||
+                `Đối tượng trọng tâm thuộc ${actName} của bài ${baseTitle}`;
 
-            const cleanAnchor = anchorLine
-                .replace(/^[-–\*\s]+/, '')
-                .replace(/^(Giáo\s*viên|GV)\s*[:\-\–]?\s*/i, '')
-                .replace(/[\.\:\;]+$/, '')
-                .trim();
+            const coreFocalObject = stripClassroomManagementWrapper(anchorLine) || `Đối tượng trọng tâm của bài ${baseTitle}`;
 
-            return `[Gợi ý hình ảnh: Hình ảnh trực quan chụp thực tế hoặc giao diện chi tiết có nhãn chú thích tiếng Việt rõ ràng minh họa trực tiếp cho nội dung: ${cleanAnchor} (Bài học: ${baseTitle})]`;
+            return `[Gợi ý hình ảnh: Cận cảnh trực quan đi thẳng vào trọng tâm đối tượng/cấu tạo/sơ đồ/bảng biểu: ${coreFocalObject} (Bài học: ${baseTitle})]`;
         };
 
         // Nếu tổng số hình ảnh trong tiết < 3, tự động bổ sung vào các hoạt động ưu tiên (HĐ 2 -> HĐ 3 -> HĐ 1 -> HĐ 4)
@@ -416,11 +433,12 @@ export const ensureFourActivitiesInAllPeriods = (
             );
             if (!actHasImage) {
                 const targetRowIdx = act.rows.findIndex(r =>
-                    /quan sát|trình chiếu|chiếu|hình|mẫu|ví dụ|tình huống|giao nhiệm vụ|yêu cầu|hướng dẫn/i.test(
+                    /hình\s*\d+|sơ\s*đồ|mô\s*hình|bộ\s*phận|cấu\s*tạo|màn\s*hình|giao\s*diện|bảng|sản\s*phẩm|vật\s*mẫu|quan\s*sát|trình\s*chiếu|chiếu/i.test(
                         r.teacher || ''
-                    )
+                    ) && !isProceduralClassroomLine(r.teacher || '')
                 );
-                const rowIdx = targetRowIdx >= 0 ? targetRowIdx : 0;
+                const fallbackIdx = act.rows.findIndex(r => !isProceduralClassroomLine(r.teacher || ''));
+                const rowIdx = targetRowIdx >= 0 ? targetRowIdx : fallbackIdx >= 0 ? fallbackIdx : 0;
                 const targetRow = act.rows[rowIdx];
                 const hintLine = buildContextualHintFromTeacherLine(targetRow.teacher || '', act.name || '');
                 targetRow.teacher = `${(targetRow.teacher || '').trim()}\n${hintLine}`.trim();
@@ -439,7 +457,7 @@ export const ensureFourActivitiesInAllPeriods = (
                 const row = act.rows[rIdx];
                 const lines = splitLinesWithHints(row.teacher || '');
                 const rowHasImage = lines.some(l => isImageHintLine(l));
-                if (!rowHasImage && lines.length > 0) {
+                if (!rowHasImage && lines.length > 0 && !lines.every(l => isProceduralClassroomLine(l))) {
                     const hintLine = buildContextualHintFromTeacherLine(row.teacher || '', act.name || '');
                     row.teacher = `${(row.teacher || '').trim()}\n${hintLine}`.trim();
                     currentCount++;
@@ -474,35 +492,154 @@ export const ensureFourActivitiesInAllPeriods = (
         };
     };
 
+    const rawIntegrationNotes = (inputData?.integrationNotes || '').trim();
+    const extraIntegrationNotes = (inputData?.additionalIntegrationNotes || '').trim();
+    const hasExplicitIntegrationNotes =
+        (rawIntegrationNotes.length > 0 &&
+            !/^(\-|\(không tích hợp\)|không tích hợp|không|none)$/i.test(rawIntegrationNotes)) ||
+        extraIntegrationNotes.length > 0;
+    const effectiveIntegrationNoteText =
+        rawIntegrationNotes && !/^(\-|\(không tích hợp\)|không tích hợp|không|none)$/i.test(rawIntegrationNotes)
+            ? rawIntegrationNotes
+            : extraIntegrationNotes;
+
+    const ensureIntegrationOrderAndActivities = (period: Period): Period => {
+        const rawObjs = Array.isArray(period.objectives) ? period.objectives : [];
+        const formattedObjList = formatObjectives(rawObjs);
+
+        const standardObjs = formattedObjList.filter(o => !o.isIntegration).map(o => o.text);
+        const integrationObjs = formattedObjList.filter(o => o.isIntegration).map(o => o.text);
+
+        // Nếu tuần dạy có ghi chú tích hợp nhưng AI chưa đưa dòng tích hợp vào Yêu cầu cần đạt,
+        // tự động tạo dòng Yêu cầu cần đạt tích hợp dựa trên nội dung bài học và đặt ở CUỐI CÙNG
+        if (hasExplicitIntegrationNotes && integrationObjs.length === 0) {
+            const prefix = extractIntegrationPrefixFromObjectives(rawObjs, effectiveIntegrationNoteText);
+            const cleanNoteDetail = effectiveIntegrationNoteText
+                .replace(/^tích\s*hợp\s*([^:\-\–]+)[:\-\–]\s*/i, '')
+                .trim();
+            const synthesizedObj =
+                cleanNoteDetail && cleanNoteDetail.toLowerCase() !== prefix.toLowerCase()
+                    ? `- ${prefix}: Vận dụng ngữ cảnh bài học "${baseTitle}" để phát triển kỹ năng và thực hành ${cleanNoteDetail.charAt(0).toLowerCase() + cleanNoteDetail.slice(1)} phù hợp với thực tiễn.`
+                    : `- ${prefix}: Dựa vào nội dung bài học "${baseTitle}" để mở rộng kỹ năng vận dụng an toàn, khoa học và sáng tạo vào thực tiễn cuộc sống.`;
+            integrationObjs.push(synthesizedObj);
+        }
+
+        // BẮT BUỘC: Các yêu cầu cần đạt của bài học nằm ở phía trên, nội dung tích hợp nằm ở cuối cùng
+        const orderedObjectives = [...standardObjs, ...integrationObjs];
+        const hasIntegrationInObjectives = integrationObjs.length > 0;
+        const integrationPrefix = extractIntegrationPrefixFromObjectives(
+            orderedObjectives,
+            effectiveIntegrationNoteText
+        );
+
+        const integrationObjectiveContent =
+            integrationObjs.length > 0
+                ? integrationObjs[integrationObjs.length - 1]
+                      .replace(/^[-–\*\s]*tích\s*hợp[^:]*:\s*/i, '')
+                      .replace(/[\.\s]+$/, '')
+                      .trim()
+                : '';
+
+        let activities = (period.activities || []).map(act => ({
+            ...act,
+            rows: (act.rows || []).map(r => {
+                const tText = r.teacher || '';
+                const sText = r.student || '';
+                const tLines = tText.split('\n').map(l => l.trim()).filter(Boolean);
+                const sLines = sText.split('\n').map(l => l.trim()).filter(Boolean);
+
+                const tHasInt = tLines.some(l => isActivityIntegrationLine(l));
+                const sHasInt = sLines.some(l => isActivityIntegrationLine(l));
+
+                // Nếu cột GV có dòng tích hợp nhưng cột HS chưa gắn nhãn tích hợp, chuẩn hóa để cả 2 cột đều hiển thị chữ nghiêng màu đỏ rõ ràng
+                if (tHasInt && !sHasInt) {
+                    const tIntLine = tLines.find(l => isActivityIntegrationLine(l)) || '';
+                    const rowPrefix = extractIntegrationPrefixFromObjectives([tIntLine], integrationPrefix);
+                    const nonImageTLines = tLines.filter(l => !isImageHintLine(l));
+                    if (sLines.length >= nonImageTLines.length && sLines.length > 0) {
+                        const lastIdx = sLines.length - 1;
+                        sLines[lastIdx] = formatActivityIntegrationLine(sLines[lastIdx], rowPrefix);
+                    } else {
+                        const fallbackStudentInt = integrationObjectiveContent
+                            ? `- ${rowPrefix}: Học sinh lắng nghe, liên hệ và thực hành ${integrationObjectiveContent.charAt(0).toLowerCase() + integrationObjectiveContent.slice(1)} theo hướng dẫn của giáo viên.`
+                            : `- ${rowPrefix}: Học sinh tích cực trao đổi, liên hệ và thực hành nội dung tích hợp gắn với tình huống thực tế của bài học.`;
+                        sLines.push(fallbackStudentInt);
+                    }
+                    return {
+                        teacher: tText,
+                        student: sLines.join('\n')
+                    };
+                }
+                return r;
+            })
+        }));
+
+        // Nếu mục I. Yêu cầu cần đạt có phần tích hợp nhưng trong toàn bộ 4 hoạt động dạy học chưa có dòng tích hợp nào,
+        // tự động bổ sung dòng tích hợp rõ ràng, chính xác vào Hoạt động 3 (hoặc Hoạt động 2) ở cả cột GV và cột HS
+        if (hasIntegrationInObjectives) {
+            const anyActivityHasIntegration = activities.some(act =>
+                (act.rows || []).some(
+                    r => isActivityIntegrationLine(r.teacher || '') || isActivityIntegrationLine(r.student || '')
+                )
+            );
+            if (!anyActivityHasIntegration && activities.length > 0) {
+                const targetActIdx = activities[2] ? 2 : activities[1] ? 1 : 0;
+                const targetAct = activities[targetActIdx];
+                const coreDetail =
+                    integrationObjectiveContent ||
+                    `vận dụng mở rộng nội dung tích hợp dựa trên bài học "${baseTitle}"`;
+                const normalizedDetail = coreDetail.charAt(0).toLowerCase() + coreDetail.slice(1);
+                const teacherIntLine = `- ${integrationPrefix}: Giáo viên hướng dẫn học sinh dựa vào nội dung bài học "${baseTitle}" để liên hệ và thực hiện yêu cầu tích hợp: ${normalizedDetail}.`;
+                const studentIntLine = `- ${integrationPrefix}: Học sinh hào hứng thảo luận, liên hệ thực tế và thực hành ${normalizedDetail} chính xác theo hướng dẫn của giáo viên.`;
+
+                targetAct.rows = [
+                    ...(targetAct.rows || []),
+                    {
+                        teacher: teacherIntLine,
+                        student: studentIntLine
+                    }
+                ];
+            }
+        }
+
+        return {
+            ...period,
+            objectives: orderedObjectives,
+            activities
+        };
+    };
+
     const cleanedPeriods = updatedPeriods.map(p =>
-        enforceThreeToFourImagesInPeriod({
-            ...p,
-            objectives: Array.isArray(p.objectives)
-                ? p.objectives.map(o =>
-                      isChatGptLessonNotMaps
-                          ? o.replace(/,?\s*Google\s*Maps/gi, '').replace(/đánh giá địa điểm trên Google Maps/gi, 'kiểm chứng thông tin trên công cụ tìm kiếm')
-                          : o
-                  )
-                : p.objectives,
-            materials: p.materials
-                ? {
-                      teacher: isChatGptLessonNotMaps
-                          ? (p.materials.teacher || '').replace(/,\s*Google\s*Maps/gi, '').replace(/Google\s*Maps\s*và\s*/gi, '')
-                          : p.materials.teacher,
-                      student: isChatGptLessonNotMaps
-                          ? (p.materials.student || '').replace(/,\s*Google\s*Maps/gi, '').replace(/Google\s*Maps\s*và\s*/gi, '')
-                          : p.materials.student
-                  }
-                : p.materials,
-            activities: (p.activities || []).map(act => ({
-                ...act,
-                rows: (act.rows || []).map(r => ({
-                    ...r,
-                    teacher: sanitizeCrossLessonHallucination(r.teacher || '', true),
-                    student: sanitizeCrossLessonHallucination(r.student || '', false)
+        enforceThreeToFourImagesInPeriod(
+            ensureIntegrationOrderAndActivities({
+                ...p,
+                objectives: Array.isArray(p.objectives)
+                    ? p.objectives.map(o =>
+                          isChatGptLessonNotMaps
+                              ? o.replace(/,?\s*Google\s*Maps/gi, '').replace(/đánh giá địa điểm trên Google Maps/gi, 'kiểm chứng thông tin trên công cụ tìm kiếm')
+                              : o
+                      )
+                    : p.objectives,
+                materials: p.materials
+                    ? {
+                          teacher: isChatGptLessonNotMaps
+                              ? (p.materials.teacher || '').replace(/,\s*Google\s*Maps/gi, '').replace(/Google\s*Maps\s*và\s*/gi, '')
+                              : p.materials.teacher,
+                          student: isChatGptLessonNotMaps
+                              ? (p.materials.student || '').replace(/,\s*Google\s*Maps/gi, '').replace(/Google\s*Maps\s*và\s*/gi, '')
+                              : p.materials.student
+                      }
+                    : p.materials,
+                activities: (p.activities || []).map(act => ({
+                    ...act,
+                    rows: (act.rows || []).map(r => ({
+                        ...r,
+                        teacher: sanitizeCrossLessonHallucination(r.teacher || '', true),
+                        student: sanitizeCrossLessonHallucination(r.student || '', false)
+                    }))
                 }))
-            }))
-        })
+            })
+        )
     );
 
     const finalPeriodNum = cleanedPeriods[0]?.period_number || explicitPeriodFromInput || 1;
@@ -792,10 +929,21 @@ export const alignContent = (
     const maxLen = Math.max(tGroups.length, rawSLines.length);
     for (let i = 0; i < maxLen; i++) {
         const tItem = tGroups[i];
-        const sLine = rawSLines[i] || '';
+        let sLine = rawSLines[i] || '';
+        let tLine = tItem ? tItem.text : '';
+
+        // Đồng bộ hóa định dạng dòng tích hợp giữa cột GV và cột HS trên cùng một hàng
+        if (tLine && isActivityIntegrationLine(tLine) && sLine && !isActivityIntegrationLine(sLine)) {
+            const matchedPrefix = extractIntegrationPrefixFromObjectives([tLine]);
+            sLine = formatActivityIntegrationLine(sLine, matchedPrefix);
+        } else if (sLine && isActivityIntegrationLine(sLine) && tLine && !isActivityIntegrationLine(tLine) && tGroups.length === rawSLines.length) {
+            const matchedPrefix = extractIntegrationPrefixFromObjectives([sLine]);
+            tLine = formatActivityIntegrationLine(tLine, matchedPrefix);
+        }
+
         if (tItem || sLine) {
             alignedRows.push({
-                teacher: tItem ? tItem.text : '',
+                teacher: tLine,
                 student: sLine,
                 precedingTeacher: tItem ? tItem.contextHistory : ''
             });
@@ -926,7 +1074,8 @@ export interface FormattedObjective {
 export const formatObjectives = (objectives: string[] | undefined | null): FormattedObjective[] => {
     if (!Array.isArray(objectives)) return [];
 
-    const result: FormattedObjective[] = [];
+    const standardResult: FormattedObjective[] = [];
+    const integrationResult: FormattedObjective[] = [];
 
     const processLine = (rawLine: string) => {
         let line = (rawLine || '')
@@ -938,8 +1087,15 @@ export const formatObjectives = (objectives: string[] | undefined | null): Forma
 
         if (!line) return;
 
+        // Chỉ nhận diện là dòng tích hợp khi thực sự bắt đầu bằng từ khóa Tích hợp / nhãn viết tắt miền tích hợp có dấu ':' hoặc '-'
+        // (Tuyệt đối không biến yêu cầu cần đạt thường của bài học có chứa chữ 'AI' hay 'năng lực số' thành dòng tích hợp)
         const isIntegration =
-            /tích\s*hợp|\bgdkncds\b|\bkncds\b|công\s*dân\s*số|\bkns\b|kỹ\s*năng\s*sống|kĩ\s*năng\s*sống|\bai\b|trí\s*tuệ\s*nhân\s*tạo|năng\s*lực\s*số|\bnls\b|\bstem\b|gdqpan|\bth\s*bài\s*\d+/i.test(line);
+            /^[-–\*\s1-9\.\)]*(\[?\s*tích\s*hợp\b|(gdkncds|kncds|kỹ\s*năng\s*công\s*dân\s*số|kĩ\s*năng\s*công\s*dân\s*số|giáo\s*dục\s*k[ỹĩ]\s*năng\s*công\s*dân\s*số|kns|k[ỹĩ]\s*năng\s*sống|nls|năng\s*lực\s*số|trí\s*tuệ\s*nhân\s*tạo|năng\s*lực\s*ai|ai|stem|gdqpan|bvmt|atgt|qcn|quyền\s*con\s*người|th\s*bài\s*\d+)\s*(\([^)]*\))?\s*[:\-\–])/i.test(
+                line
+            ) ||
+            /\btích\s*hợp\s+(giáo\s*dục|môn|năng\s*lực|k[ỹĩ]\s*năng|trí\s*tuệ|quyền|bảo\s*vệ|an\s*toàn|stem|liên\s*môn)/i.test(
+                line
+            );
 
         if (isIntegration) {
             let text = line.replace(/^[1-9]\s*[\.\:\)\-–]\s*/, '');
@@ -948,8 +1104,8 @@ export const formatObjectives = (objectives: string[] | undefined | null): Forma
             if (/^(gdkncds|kncds|kỹ\s*năng\s*công\s*dân\s*số|kĩ\s*năng\s*công\s*dân\s*số|giáo\s*dục\s*k[ỹĩ]\s*năng\s*công\s*dân\s*số)(\s*\([^)]*\))?\s*[:\-\–\.]\s*/i.test(text)) {
                 text = text.replace(/^(gdkncds|kncds|kỹ\s*năng\s*công\s*dân\s*số|kĩ\s*năng\s*công\s*dân\s*số|giáo\s*dục\s*k[ỹĩ]\s*năng\s*công\s*dân\s*số)(\s*\([^)]*\))?\s*[:\-\–\.]\s*/i, '');
                 text = `- Tích hợp giáo dục kĩ năng công dân số: ${text.trim()}`;
-            } else if (/^tích\s*hợp\s+([^:]+)[:\-\–]\s*(.*)$/i.test(text)) {
-                const match = text.match(/^tích\s*hợp\s+([^:]+)[:\-\–]\s*(.*)$/i);
+            } else if (/^\[?\s*tích\s*hợp\s+([^\]:]+)\]?\s*[:\-\–]\s*(.*)$/i.test(text)) {
+                const match = text.match(/^\[?\s*tích\s*hợp\s+([^\]:]+)\]?\s*[:\-\–]\s*(.*)$/i);
                 if (match) {
                     const domain = normalizeIntegrationDomainLabel(match[1].trim());
                     const content = match[2].trim();
@@ -958,7 +1114,7 @@ export const formatObjectives = (objectives: string[] | undefined | null): Forma
                     text = `- Tích hợp giáo dục kĩ năng công dân số: ${text}`;
                 }
             } else {
-                text = text.replace(/^tích\s*hợp\s*[:\-\–\.]?\s*/i, '').trim();
+                text = text.replace(/^\[?\s*tích\s*hợp\s*\]?\s*[:\-\–\.]?\s*/i, '').trim();
                 if (/^(gdkncds|kncds|kỹ\s*năng\s*công\s*dân\s*số|kĩ\s*năng\s*công\s*dân\s*số)\s*[:\-\–\.]?\s*/i.test(text)) {
                     text = text.replace(/^(gdkncds|kncds|kỹ\s*năng\s*công\s*dân\s*số|kĩ\s*năng\s*công\s*dân\s*số)\s*[:\-\–\.]?\s*/i, '').trim();
                     text = `- Tích hợp giáo dục kĩ năng công dân số: ${text}`;
@@ -971,16 +1127,15 @@ export const formatObjectives = (objectives: string[] | undefined | null): Forma
                 } else if (/^(năng\s*lực\s*số|nls)(\s*\([^)]*\))?\s*[:\-\–\.]\s*/i.test(text)) {
                     text = text.replace(/^(năng\s*lực\s*số|nls)(\s*\([^)]*\))?\s*[:\-\–\.]\s*/i, '');
                     text = `- Tích hợp năng lực số: ${text.trim()}`;
-                } else if (result.length > 0 && result[result.length - 1].isIntegration) {
-                    // Dòng nối tiếp của mục tiêu tích hợp phía trên -> gộp chung vào dòng tích hợp để đồng nhất định dạng
-                    result[result.length - 1].text = `${result[result.length - 1].text.replace(/[\.\s]+$/, '')}; ${text}`;
+                } else if (integrationResult.length > 0) {
+                    integrationResult[integrationResult.length - 1].text = `${integrationResult[integrationResult.length - 1].text.replace(/[\.\s]+$/, '')}; ${text}`;
                     return;
                 } else {
                     text = `- Tích hợp giáo dục kĩ năng công dân số: ${text.trim()}`;
                 }
             }
 
-            result.push({
+            integrationResult.push({
                 text,
                 isIntegration: true
             });
@@ -993,7 +1148,7 @@ export const formatObjectives = (objectives: string[] | undefined | null): Forma
 
             if (text) {
                 const capitalized = text.charAt(0).toUpperCase() + text.slice(1);
-                result.push({
+                standardResult.push({
                     text: `- ${capitalized}`,
                     isIntegration: false
                 });
@@ -1012,7 +1167,8 @@ export const formatObjectives = (objectives: string[] | undefined | null): Forma
         });
     });
 
-    return result;
+    // BẮT BUỘC: Các yêu cầu cần đạt của bài học nằm ở phía trên, nội dung tích hợp luôn nằm ở cuối cùng
+    return [...standardResult, ...integrationResult];
 };
 
 export const formatGradeHeader = (val?: string) => {
@@ -1242,7 +1398,7 @@ const buildCellParagraphsFromText = (
                             size: 26,
                             bold: false,
                             italics: true,
-                            color: "000000"
+                            color: "C00000"
                         })
                     ]
                 })
